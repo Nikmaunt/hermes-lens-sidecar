@@ -15,6 +15,8 @@ import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
 import { readDecisions } from './readers/decisions.js'
 import { readHabits } from './readers/habits.js'
 import { readPolishWords } from './readers/polish.js'
+import { readDocs } from './readers/docs.js'
+import type { DocumentItemOut } from './readers/vault.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
 import { runSearch } from './domain/search.js'
@@ -77,6 +79,14 @@ async function timelineEvents(ctx: Ctx): Promise<ReturnType<typeof collectEvents
   })
 }
 
+/** Everything /api/documents serves: subscriptions.md lines + vault/docs/ files. */
+function allDocuments(ctx: Ctx): DocumentItemOut[] {
+  return [
+    ...readSubscriptions(ctx.paths.subscriptionsPath, ctx.log),
+    ...readDocs(ctx.paths.docsDir, ctx.log),
+  ]
+}
+
 async function currentInbox(ctx: Ctx): Promise<Awaited<ReturnType<typeof readInbox>>> {
   // Items with a pending lens-queue triage are hidden until the agent's
   // cron actually moves the file — mirrors the app's optimistic model.
@@ -110,7 +120,7 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
       const brief = todayMorningBrief(ctx.paths.briefsDir, now, ctx.log)
       const body = buildToday({
         followUps,
-        documents: readSubscriptions(ctx.paths.subscriptionsPath, ctx.log),
+        documents: allDocuments(ctx),
         timelineEvents: events,
         inboxCount: inbox.length,
         now,
@@ -140,7 +150,7 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
     case '/api/people':
       return respond(res, 200, { people: readPeople(ctx.paths.peopleDir, ctx.log) })
     case '/api/documents': {
-      const items = readSubscriptions(ctx.paths.subscriptionsPath, ctx.log)
+      const items = allDocuments(ctx)
       // monthlyTotal: recurring spend normalized per-month (yearly ÷ 12,
       // rounded to cents), one entry per currency — contract semantics.
       const totals = new Map<'EUR' | 'PLN' | 'USD', number>()
@@ -186,7 +196,7 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
       const body = runSearch(q, {
         memory: readMemory(ctx.paths.memoryMdPath, ctx.paths.userMdPath, queue, ctx.log),
         people: readPeople(ctx.paths.peopleDir, ctx.log),
-        documents: readSubscriptions(ctx.paths.subscriptionsPath, ctx.log),
+        documents: allDocuments(ctx),
         inbox: await currentInbox(ctx),
         sessions: ctx.statedb.allSessions(),
         cronJobs: readCronJobs(jobsJson, ctx.log),

@@ -1,0 +1,3 @@
+- **Nimbus Mobile** — renews: 2026-08-01, cancel by: 2026-07-25, 23,50 zł/month
+- **Bookworm Plus** — renews: 2026-07-20, zł 23.99/month (from [[podpiski]])
+- **CloudBox VPS** — renews: 2026-12-01, EUR 5.00/month

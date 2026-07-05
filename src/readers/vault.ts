@@ -125,48 +125,80 @@ const CURRENCY: Record<string, 'EUR' | 'PLN' | 'USD'> = {
   PLN: 'PLN',
 }
 
+// Live PLN/EUR data uses the currency token as prefix (`zł 23.99`,
+// `EUR 5.00`) AND as suffix with a comma decimal (`23,50 zł`) — both forms
+// must parse everywhere an amount appears.
+const CUR_SRC = '\\$|€|zł|PLN|USD|EUR'
+const NUM_SRC = '\\d+(?:[.,]\\d{1,2})?'
+const AMOUNT_SRC = `(?:(${CUR_SRC})\\s?(${NUM_SRC})|(${NUM_SRC})\\s?(${CUR_SRC}))`
+
+function parseBillingPeriod(word: string): 'monthly' | 'yearly' | null {
+  const w = word.toLowerCase()
+  if (/^(month|mo|monthly|месяц)/.test(w)) return 'monthly'
+  if (/^(year|yr|annual|год)/.test(w)) return 'yearly'
+  return null
+}
+
+function toMoney(
+  currencyToken: string,
+  amountStr: string,
+): { cents: number; currency: 'EUR' | 'PLN' | 'USD' } | null {
+  const currency = CURRENCY[currencyToken]
+  const amountNum = Number(amountStr.replace(',', '.'))
+  if (currency === undefined || !Number.isFinite(amountNum)) return null
+  return { cents: Math.round(amountNum * 100), currency }
+}
+
+const AMOUNT_SPEC_RE = new RegExp(`^${AMOUNT_SRC}(?:\\s*\\/\\s*(\\w+))?$`)
+
+/** Parse a standalone amount spec like "2400 PLN/month" or "EUR 5.00/month". */
+export function parseAmountSpec(spec: string): {
+  amount: { cents: number; currency: 'EUR' | 'PLN' | 'USD' } | null
+  billingPeriod: 'monthly' | 'yearly' | null
+} {
+  const m = AMOUNT_SPEC_RE.exec(spec.trim())
+  if (m === null) return { amount: null, billingPeriod: null }
+  return {
+    amount: toMoney(m[1] ?? m[4] ?? '', m[2] ?? m[3] ?? ''),
+    billingPeriod: parseBillingPeriod(m[5] ?? ''),
+  }
+}
+
 /**
  * subscriptions.md lines, per SKILL.md:
- *   `- **Service Name** — renews: YYYY-MM-DD, $amount/period (from [[NoteName]])`
- * The file is empty today (EMPTY-VALID endpoint) but the parser is live from
- * day one so entries appear the moment the agent writes the first line.
+ *   `- **Service Name** — renews: YYYY-MM-DD[, cancel by: YYYY-MM-DD], $amount/period (from [[NoteName]])`
+ * The `cancel by` group is optional and fills cancelBy when present.
  */
+const SUBSCRIPTION_RE = new RegExp(
+  '^- \\*\\*(.+?)\\*\\*\\s*[—-]\\s*renews:\\s*(\\d{4}-\\d{2}-\\d{2})' +
+    '(?:,\\s*cancel by:\\s*(\\d{4}-\\d{2}-\\d{2}))?' +
+    `,\\s*${AMOUNT_SRC}\\/(\\w+)` +
+    '(?:\\s*\\(from \\[\\[(.+?)\\]\\]\\))?\\s*$',
+)
+
 export function readSubscriptions(path: string, log: Logger): DocumentItemOut[] {
   const raw = readTextIfExists(path, log)
   if (raw === undefined) return []
   const out: DocumentItemOut[] = []
-  const re =
-    /^- \*\*(.+?)\*\*\s*[—-]\s*renews:\s*(\d{4}-\d{2}-\d{2}),\s*(\$|€|zł|PLN|USD|EUR)\s?([\d]+(?:[.,]\d{1,2})?)\/(\w+)(?:\s*\(from \[\[(.+?)\]\]\))?\s*$/
   for (const line of raw.split(/\r?\n/)) {
     const t = line.trim()
     if (!t.startsWith('- ')) continue
-    const m = re.exec(t)
+    const m = SUBSCRIPTION_RE.exec(t)
     if (m === null) {
       log.warn('subscription line skipped: unrecognized format')
       continue
     }
     const name = m[1] ?? ''
-    const currency = CURRENCY[m[3] ?? '']
-    const amountNum = Number((m[4] ?? '').replace(',', '.'))
-    const periodWord = (m[5] ?? '').toLowerCase()
-    const billingPeriod = /^(month|mo|monthly|месяц)/.test(periodWord)
-      ? ('monthly' as const)
-      : /^(year|yr|annual|год)/.test(periodWord)
-        ? ('yearly' as const)
-        : null
     out.push({
       id: 'sub-' + translitSlug(name, 40),
       title: name,
       kind: 'subscription',
       provider: name,
-      amount:
-        currency !== undefined && Number.isFinite(amountNum)
-          ? { cents: Math.round(amountNum * 100), currency }
-          : null,
-      billingPeriod,
+      amount: toMoney(m[4] ?? m[7] ?? '', m[5] ?? m[6] ?? ''),
+      billingPeriod: parseBillingPeriod(m[8] ?? ''),
       renewsOn: m[2] ?? null,
-      cancelBy: null,
-      notes: m[6] !== undefined ? `from ${m[6]}` : null,
+      cancelBy: m[3] ?? null,
+      notes: m[9] !== undefined ? `from ${m[9]}` : null,
     })
   }
   return out
