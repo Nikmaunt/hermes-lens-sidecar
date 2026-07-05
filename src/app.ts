@@ -12,6 +12,7 @@ import { readMemory } from './readers/memory.js'
 import { buildStatus, readCronJobs } from './readers/status.js'
 import { readFollowups, readPeople, readSubscriptions, inboxFileEvents } from './readers/vault.js'
 import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
+import { readDecisions } from './readers/decisions.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
 import { runSearch } from './domain/search.js'
@@ -150,11 +151,13 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
       const monthlyTotal = [...totals.entries()].map(([currency, cents]) => ({ currency, cents }))
       return respond(res, 200, { items, monthlyTotal })
     }
-    case '/api/decisions':
-      // EMPTY-VALID: decisions.md is empty and NO line format is defined in
-      // the agent's skills — parsing would be guesswork. `?project=` filter
-      // over the empty set is a no-op.
-      return respond(res, 200, { decisions: [] })
+    case '/api/decisions': {
+      const decisions = readDecisions(ctx.paths.decisionsPath, ctx.log)
+      const project = url.searchParams.get('project')
+      return respond(res, 200, {
+        decisions: project === null ? decisions : decisions.filter((d) => d.projectId === project),
+      })
+    }
     case '/api/habits':
       // EMPTY-VALID: no habit tracking exists anywhere on the VPS yet.
       return respond(res, 200, { habits: [], generatedAt: toWarsawIso(now) })
