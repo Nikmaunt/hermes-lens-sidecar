@@ -58,7 +58,7 @@ describe('note parsing (agent format)', () => {
     const raw = readFileSync(fixturePath('broken', 'inbox-torn-frontmatter.md'), 'utf8')
     expect(parseNote(raw).ok).toBe(false)
   })
-  it('finds the frontmatter fence behind a leading triage comment (real agent layout)', () => {
+  it('finds the fence behind the uncertain-note prefix: comment + [!question] callout (live VPS layout)', () => {
     const raw = readFileSync(fixturePath('vault', 'inbox', 'osmotr-kotla-1900.md'), 'utf8')
     const note = parseNote(raw)
     expect(note.ok).toBe(true)
@@ -73,6 +73,24 @@ describe('note parsing (agent format)', () => {
     expect(text).toContain('Дата: вторник, 7 июля 2026 г., 19:00')
     expect(text).toContain('котельная в подвале') // wikilink alias kept as words
     expect(text).not.toMatch(/[#*[\]]/)
+    expect(text).not.toContain('date:')
+    expect(text).not.toContain('!question')
+    expect(text).not.toContain('triage-uncertain')
+  })
+  it('skips only triage markers before the fence, never user content', () => {
+    const fm = '---\ncategory: misc\n---\nтело'
+    // comment-only prefix (previous fix) still works
+    expect(parseNote(`<!-- triage: pending -->\n\n${fm}`).frontmatter.category).toBe('misc')
+    // callout-only prefix, with continuation lines
+    expect(
+      parseNote(`> [!question] Triage: непонятно\n> ещё строка маркера\n\n${fm}`).frontmatter.category,
+    ).toBe('misc')
+    // arbitrary user content before a fence still means "no frontmatter"
+    const plain = parseNote(`просто заметка\n${fm}`)
+    expect(plain.frontmatter).toEqual({})
+    expect(plain.body).toBe(`просто заметка\n${fm}`)
+    // a plain (non-callout) blockquote is user content too
+    expect(parseNote(`> цитата\n${fm}`).frontmatter).toEqual({})
   })
 })
 

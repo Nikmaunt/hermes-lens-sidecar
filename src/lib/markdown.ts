@@ -24,12 +24,15 @@ function unquote(v: string): string {
 
 export function parseNote(raw: string): ParsedNote {
   const original = raw.replace(/^﻿/, '')
-  // The agent's triage cron may leave an HTML marker comment (and blank
-  // lines) above the frontmatter fence; the fence must still be found there,
-  // otherwise the whole file — frontmatter included — leaks out as body.
+  // The agent's triage cron may leave marker content above the frontmatter
+  // fence: an HTML comment, blank lines, and (for uncertain notes) a
+  // `> [!question]` callout with `> ` continuation lines. The fence must
+  // still be found behind those, otherwise the whole file — frontmatter
+  // included — leaks out as body. Anything else before the fence is user
+  // content and still means "no frontmatter".
   let text = original
   for (;;) {
-    const lead = /^(?:[ \t\r\n]+|<!--[\s\S]*?-->)/.exec(text)
+    const lead = /^(?:[ \t\r\n]+|<!--[\s\S]*?-->|>\s*\[!\w+\][^\n]*(?:\r?\n>[^\n]*)*)/.exec(text)
     if (lead === null) break
     text = text.slice(lead[0].length)
   }
