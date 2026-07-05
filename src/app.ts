@@ -233,6 +233,27 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
 
     void (async () => {
       try {
+        // CORS: the Hermes Lens app runs in a Capacitor WebView whose origin
+        // (https://localhost) never matches the sidecar's, so every fetch is
+        // cross-origin. `*` is safe here because no cookies or ambient
+        // credentials are involved — the security boundary is the bearer
+        // token plus tailnet-only exposure. The header is set before any
+        // dispatch so it reaches EVERY response, 401s and error envelopes
+        // included; otherwise the app cannot read a 401 body and would
+        // misclassify auth failures as network errors.
+        res.setHeader('access-control-allow-origin', '*')
+        if (method === 'OPTIONS') {
+          // Preflight requests never carry Authorization, so this must run
+          // before the auth check.
+          res.writeHead(204, {
+            'access-control-allow-methods': 'GET, POST, OPTIONS',
+            'access-control-allow-headers': 'Authorization, Content-Type',
+            'access-control-max-age': '600',
+          })
+          res.end()
+          finish(204)
+          return
+        }
         if (!isAuthorized(req.headers.authorization, cfg.token)) {
           finish(respond(res, 401, { error: 'unauthorized' }))
           return
