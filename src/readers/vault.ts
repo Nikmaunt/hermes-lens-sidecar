@@ -16,6 +16,25 @@ export interface FollowUpOut {
 }
 
 /**
+ * The agent appends criticality words to follow-up descriptions
+ * («…, критично»). Criticality already reaches the app structurally
+ * (urgency / reminder badges), so trailing markers are noise in a display
+ * title. Strips punctuation-separated or parenthesized trailing markers,
+ * repeatedly for stacked ones; never empties the title.
+ */
+const CRITICALITY_TAIL_RE =
+  /(?:\s*[,;:—–-]+\s*|\s+[(（])(?:критично|важно|срочно|critical|important|urgent)[)）]?[\s.!]*$/i
+
+function stripCriticalityTail(title: string): string {
+  let t = title.trim()
+  for (;;) {
+    const m = CRITICALITY_TAIL_RE.exec(t)
+    if (m === null || m.index === 0) return t
+    t = t.slice(0, m.index).trimEnd()
+  }
+}
+
+/**
  * followups.md lines, per the agent's vault-automation SKILL.md:
  *   `- [ ] [[YYYY-MM-DD]] — <description> (from [[NoteName]])`
  * Checked boxes are done and skipped; lines that open a checkbox but don't
@@ -42,6 +61,7 @@ export function readFollowups(path: string, now: Date, log: Logger): FollowUpOut
       source = from[1] ?? ''
       title = title.slice(0, from.index).trim()
     }
+    title = stripCriticalityTail(title)
     const days = daysUntil(dueDate, now)
     out.push({
       id: 'fu-' + shortHash(t, 10),
