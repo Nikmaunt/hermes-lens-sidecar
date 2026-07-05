@@ -153,6 +153,12 @@ describe('contract semantics', () => {
     expect(t.followUps[0]?.source).toBe('vstrecha-s-olegom')
     expect(t.followUps[2]?.source).toBe('')
 
+    // criticality words never reach display titles — urgency carries the signal
+    expect(t.followUps[0]?.title).toBe('ответить Олегу про маршрут')
+    for (const f of t.followUps) {
+      expect(f.title).not.toMatch(/критично|важно|critical/i)
+    }
+
     // Spotify renews in ~10 days (in window); Proton in ~200 days (out)
     expect(t.deadlines).toHaveLength(1)
     expect(t.deadlines[0]?.kind).toBe('subscription')
@@ -178,6 +184,22 @@ describe('contract semantics', () => {
     expect(bank?.text).not.toContain('Не уверен') // callout body stripped
     expect(bank?.tags).toContain('finance')
     expect(bank?.source).toBe('telegram')
+  })
+
+  it('/api/inbox: real agent note layout — frontmatter never leaks, body flattened to plain text', async () => {
+    const inbox = InboxResponse.parse((await env.get('/api/inbox')).json)
+    for (const item of inbox.items) {
+      expect(item.text).not.toContain('---')
+      expect(item.text).not.toContain('criticality')
+      expect(item.text).not.toContain('<!--')
+    }
+    const visit = inbox.items.find((i) => i.id === 'osmotr-kotla-1900')
+    expect(visit).toBeDefined()
+    expect(visit?.text.startsWith('Осмотр котла')).toBe(true)
+    expect(visit?.text).toContain('Дата: вторник, 7 июля 2026 г., 19:00')
+    expect(visit?.text).toContain('котельная в подвале')
+    expect(visit?.text).not.toMatch(/[#*]/)
+    expect(visit?.tags).toContain('appointment')
   })
 
   it('/api/reminders: field mapping and criticality', async () => {
@@ -231,6 +253,26 @@ describe('contract semantics', () => {
     const agent = TimelineResponse.parse((await env.get('/api/timeline?category=agent')).json)
     expect(agent.events.find((e) => e.id === 'sess-s-old')?.title).toBe('Agent session')
     expect(agent.events.find((e) => e.id === 'sess-s-digest')?.category).toBe('agent')
+  })
+
+  it('/api/timeline: session titles humanized, no trailing dates, calm meta', async () => {
+    const agent = TimelineResponse.parse((await env.get('/api/timeline?category=agent')).json)
+    const recompute = agent.events.find((e) => e.id === 'sess-s-recompute')
+    expect(recompute?.title).toBe('Пересчёт напоминаний')
+    expect(recompute?.detail).toBe('автозадача · 15 шагов')
+
+    const chat = agent.events.find((e) => e.id === 'sess-s-today')
+    expect(chat?.title).toBe('Обсуждение бюджета поездки') // human title untouched
+    expect(chat?.detail).toBe('telegram · 12 сообщений')
+
+    const digest = agent.events.find((e) => e.id === 'sess-s-digest')
+    expect(digest?.title).toBe('Morning digest') // unknown cron title passes through
+    expect(digest?.detail).toBe('автозадача · 1 шаг')
+
+    for (const e of agent.events) {
+      expect(e.title).not.toMatch(/·\s*[A-Z][a-z]{2}\s+\d{1,2}(\s+\d{1,2}:\d{2})?\s*$/)
+      expect(e.detail).not.toMatch(/messages|tool calls/)
+    }
   })
 
   it('unknown query params ignored; unknown route 404; wrong method 405', async () => {

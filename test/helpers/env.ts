@@ -64,6 +64,8 @@ function buildStateDb(dbPath: string): SessionSpec[] {
   ins.run('s-today', 'telegram', 'Обсуждение бюджета поездки', nowSec - 7200, nowSec - 6900, 12, 3, 900, 400, 0.02, 0.031)
   // 30 h ago — outside the 24 h window, inside month-to-date (same month in tests run mid-month)
   ins.run('s-digest', 'cron', 'Morning digest', nowSec - 108_000, nowSec - 107_700, 4, 1, 300, 120, 0.012, null)
+  // 1 h ago — log-flavored cron title exactly as the agent writes it
+  ins.run('s-recompute', 'cron', 'reminders-recompute · Jul 05 07:01', nowSec - 3600, nowSec - 3540, 25, 15, 700, 250, 0.018, null)
   // 20 days ago, NULL title and no ended_at — exercises fallbacks
   ins.run('s-old', 'telegram', null, nowSec - 20 * 86_400, null, 40, 9, 5000, 2000, 0.5, 0.4)
   db.prepare(`INSERT INTO messages VALUES (1, 's-today', 'user', ?, ?)`).run(
@@ -75,6 +77,7 @@ function buildStateDb(dbPath: string): SessionSpec[] {
   return [
     { id: 's-today', startedAtMs: (nowSec - 7200) * 1000, costUsd: 0.031 },
     { id: 's-digest', startedAtMs: (nowSec - 108_000) * 1000, costUsd: 0.012 },
+    { id: 's-recompute', startedAtMs: (nowSec - 3600) * 1000, costUsd: 0.018 },
     { id: 's-old', startedAtMs: (nowSec - 20 * 86_400) * 1000, costUsd: 0.4 },
   ]
 }

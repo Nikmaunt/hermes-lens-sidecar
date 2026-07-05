@@ -28,6 +28,45 @@ export const TIMELINE_PAGE_SIZE = 25
 const BACKUP_NAME_RE = /^(?:state|vault)-\d{4}-\d{2}-\d{2}\.(?:db|tar\.gz)$/
 
 /**
+ * The agent titles cron sessions like `reminders-recompute · Jul 05 07:01` —
+ * log flavor the app shouldn't render. The event already carries `at`, so
+ * the trailing ` · <date>` is dropped, and known cron job names map to human
+ * labels (fallback: the raw name). Already-human titles (e.g. Telegram
+ * sessions) pass through untouched.
+ */
+const TITLE_DATE_TAIL_RE =
+  /\s*·\s*(?:[A-Z][a-z]{2}\s+\d{1,2}(?:,?\s+\d{4})?(?:\s+\d{1,2}:\d{2})?|\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?)\s*$/
+
+const CRON_LABELS: Record<string, string> = {
+  'inbox-triage': 'Разбор инбокса',
+  'reminders-recompute': 'Пересчёт напоминаний',
+  'reminders-escalate': 'Проверка критичных напоминаний',
+  'nightly-backup': 'Ночной бэкап',
+}
+
+function sessionTitle(s: SessionRow): string {
+  const title = s.title === null ? '' : s.title.replace(TITLE_DATE_TAIL_RE, '').trim()
+  if (title === '') return s.source === 'cron' ? 'Cron run' : 'Agent session'
+  if (s.source === 'cron') return CRON_LABELS[title] ?? title
+  return title
+}
+
+function ruPlural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
+  return many
+}
+
+function sessionDetail(s: SessionRow): string {
+  if (s.source === 'cron') {
+    return `автозадача · ${s.toolCallCount} ${ruPlural(s.toolCallCount, 'шаг', 'шага', 'шагов')}`
+  }
+  return `${s.source} · ${s.messageCount} ${ruPlural(s.messageCount, 'сообщение', 'сообщения', 'сообщений')}`
+}
+
+/**
  * Merge all v1 event sources, newest first. PARTIAL endpoint: memory /
  * habit / document / people events don't exist yet — additive evolution
  * adds them later without breaking the contract.
@@ -45,8 +84,8 @@ export function collectEvents(input: {
       id: `sess-${s.id}`,
       at: toWarsawIso(new Date(s.endedAtMs ?? s.startedAtMs)),
       category: 'agent', // both chat and cron sessions are agent activity
-      title: s.title ?? (s.source === 'cron' ? 'Cron run' : 'Agent session'),
-      detail: `${s.source} · ${s.messageCount} messages · ${s.toolCallCount} tool calls`,
+      title: sessionTitle(s),
+      detail: sessionDetail(s),
       relatedId: null,
     })
   }

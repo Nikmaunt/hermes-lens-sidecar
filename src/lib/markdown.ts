@@ -23,8 +23,17 @@ function unquote(v: string): string {
 }
 
 export function parseNote(raw: string): ParsedNote {
-  const text = raw.replace(/^﻿/, '')
-  if (!text.startsWith('---')) return { frontmatter: {}, body: text, ok: true }
+  const original = raw.replace(/^﻿/, '')
+  // The agent's triage cron may leave an HTML marker comment (and blank
+  // lines) above the frontmatter fence; the fence must still be found there,
+  // otherwise the whole file — frontmatter included — leaks out as body.
+  let text = original
+  for (;;) {
+    const lead = /^(?:[ \t\r\n]+|<!--[\s\S]*?-->)/.exec(text)
+    if (lead === null) break
+    text = text.slice(lead[0].length)
+  }
+  if (!text.startsWith('---')) return { frontmatter: {}, body: original, ok: true }
 
   const lines = text.split(/\r?\n/)
   let close = -1
@@ -89,6 +98,28 @@ export function stripTriageMarkers(body: string): string {
     out.push(line)
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Lightly flatten a Markdown note body to plain text for display: drop ATX
+ * heading marks and **emphasis** asterisks, unwrap [[wikilinks]] to their
+ * visible words. Line breaks are preserved — this is a cleanup, not a
+ * re-layout.
+ */
+export function flattenInlineMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}#{1,6}\s+/, '') // ATX heading marks
+        .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2') // [[target|alias]] → alias
+        .replace(/\[\[([^\]]+)\]\]/g, '$1') // [[name]] → name
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold**
+        .replace(/__([^_]+)__/g, '$1') // __bold__
+        .replace(/\*([^*\s][^*]*)\*/g, '$1'), // *italic* (list markers untouched)
+    )
+    .join('\n')
+    .trim()
 }
 
 export function firstString(v: string | string[] | undefined): string | undefined {

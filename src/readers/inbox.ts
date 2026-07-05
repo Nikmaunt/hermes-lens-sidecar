@@ -1,6 +1,12 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { listFiles, readTextIfExists } from '../lib/fsread.js'
-import { asStringArray, firstString, parseNote, stripTriageMarkers } from '../lib/markdown.js'
+import {
+  asStringArray,
+  firstString,
+  flattenInlineMarkdown,
+  parseNote,
+  stripTriageMarkers,
+} from '../lib/markdown.js'
 import { toWarsawIso } from '../lib/time.js'
 import type { Logger } from '../lib/log.js'
 
@@ -14,7 +20,8 @@ export interface InboxItemOut {
 
 /**
  * vault/inbox/*.md → /api/inbox items, oldest first.
- * id = filename slug; text = body stripped of triage markers; capturedAt =
+ * id = filename slug; text = body stripped of triage markers and flattened
+ * to plain text; capturedAt =
  * file mtime; source: sidecar `via: hermes-lens` marker → capture, explicit
  * frontmatter source honored, everything else (agent-written) → telegram.
  */
@@ -52,7 +59,7 @@ export async function readInbox(inboxDir: string, log: Logger): Promise<InboxIte
     )
     items.push({
       id: f.name.replace(/\.md$/, ''),
-      text: stripTriageMarkers(parsed.body),
+      text: flattenInlineMarkdown(stripTriageMarkers(parsed.body)),
       capturedAt: toWarsawIso(new Date(f.mtimeMs)),
       source,
       tags,

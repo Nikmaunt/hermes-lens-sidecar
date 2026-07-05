@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { createLogger } from '../src/lib/log.js'
 import { daysUntil, toWarsawDate, toWarsawIso, warsawHhmm } from '../src/lib/time.js'
 import { translitSlug } from '../src/lib/translit.js'
-import { parseNote, stripTriageMarkers } from '../src/lib/markdown.js'
+import { flattenInlineMarkdown, parseNote, stripTriageMarkers } from '../src/lib/markdown.js'
 import { readFollowups, readSubscriptions } from '../src/readers/vault.js'
+import { collectEvents } from '../src/domain/timeline.js'
+import type { SessionRow } from '../src/readers/statedb.js'
 import { fixturePath } from './helpers/env'
 import { readFileSync } from 'node:fs'
 
@@ -56,20 +58,82 @@ describe('note parsing (agent format)', () => {
     const raw = readFileSync(fixturePath('broken', 'inbox-torn-frontmatter.md'), 'utf8')
     expect(parseNote(raw).ok).toBe(false)
   })
+  it('finds the frontmatter fence behind a leading triage comment (real agent layout)', () => {
+    const raw = readFileSync(fixturePath('vault', 'inbox', 'osmotr-kotla-1900.md'), 'utf8')
+    const note = parseNote(raw)
+    expect(note.ok).toBe(true)
+    expect(note.frontmatter.criticality).toBe('high')
+    expect(note.frontmatter.category).toBe('appointment')
+    expect(note.frontmatter.time).toBe('19:00')
+    expect(note.body).not.toContain('---')
+    expect(note.body).not.toContain('criticality')
+
+    const text = flattenInlineMarkdown(stripTriageMarkers(note.body))
+    expect(text.startsWith('Осмотр котла')).toBe(true)
+    expect(text).toContain('Дата: вторник, 7 июля 2026 г., 19:00')
+    expect(text).toContain('котельная в подвале') // wikilink alias kept as words
+    expect(text).not.toMatch(/[#*[\]]/)
+  })
+})
+
+describe('markdown flattening', () => {
+  it('drops ATX marks and emphasis, keeps line breaks and list markers', () => {
+    expect(flattenInlineMarkdown('## Заголовок\n**жирный** и *курсив*\n* пункт списка\n[[note|слово]]')).toBe(
+      'Заголовок\nжирный и курсив\n* пункт списка\nслово',
+    )
+  })
+})
+
+describe('timeline session presentation', () => {
+  const session = (over: Partial<SessionRow>): SessionRow => ({
+    id: 'x',
+    source: 'cron',
+    title: null,
+    startedAtMs: Date.UTC(2026, 6, 5, 5, 1),
+    endedAtMs: Date.UTC(2026, 6, 5, 5, 2),
+    messageCount: 25,
+    toolCallCount: 15,
+    costUsd: 0,
+    ...over,
+  })
+  const only = (s: SessionRow) =>
+    collectEvents({ sessions: [s], inboxFiles: [], backupFiles: [], journal: [] })[0]
+
+  it('strips the trailing date and humanizes known cron names', () => {
+    expect(only(session({ title: 'reminders-recompute · Jul 05 07:01' }))?.title).toBe(
+      'Пересчёт напоминаний',
+    )
+    expect(only(session({ title: 'inbox-triage · Jul 05' }))?.title).toBe('Разбор инбокса')
+    expect(only(session({ title: 'reminders-escalate' }))?.title).toBe('Проверка критичных напоминаний')
+    expect(only(session({ title: 'nightly-backup · 2026-07-05 03:00' }))?.title).toBe('Ночной бэкап')
+    expect(only(session({ title: 'weekly-review · Jul 05 06:00' }))?.title).toBe('weekly-review') // fallback: raw name
+  })
+  it('leaves human titles untouched and calms the meta line', () => {
+    const chat = only(session({ source: 'telegram', title: 'Обсуждение бюджета поездки', messageCount: 21 }))
+    expect(chat?.title).toBe('Обсуждение бюджета поездки')
+    expect(chat?.detail).toBe('telegram · 21 сообщение')
+    expect(only(session({}))?.detail).toBe('автозадача · 15 шагов')
+    expect(only(session({ toolCallCount: 3 }))?.detail).toBe('автозадача · 3 шага')
+    expect(only(session({}))?.title).toBe('Cron run') // null title fallback survives
+  })
 })
 
 describe('followups.md parser', () => {
   it('parses urgency/source per SKILL.md format, skips checked and broken lines', () => {
     const { log, lines } = collectingLogger()
     const items = readFollowups(fixturePath('vault', 'followups.md'), NOW, log)
-    expect(items).toHaveLength(3)
-    expect(items.map((i) => i.urgency)).toEqual(['overdue', 'today', 'soon'])
+    expect(items).toHaveLength(4)
+    expect(items.map((i) => i.urgency)).toEqual(['overdue', 'today', 'soon', 'soon'])
     expect(items[0]).toMatchObject({
-      title: 'ответить Олегу про маршрут, критично',
+      title: 'ответить Олегу про маршрут', // trailing «, критично» stripped
       dueDate: '2026-07-01',
       source: 'vstrecha-s-olegom',
     })
-    expect(items[2]?.source).toBe('')
+    expect(items[2]).toMatchObject({
+      title: 'Осмотр котла, 19:00', // criticality gone, the time kept
+      source: 'osmotr-kotla',
+    })
+    expect(items[3]?.source).toBe('')
     expect(lines.filter((l) => l.includes('followup line skipped'))).toHaveLength(1)
   })
 })
