@@ -25,6 +25,8 @@ export interface TodayOut {
   agentActivity: { id: string; at: string; summary: string; category: EventCategoryOut }[]
   inboxCount: number
   generatedAt: string
+  /** Today's freshest morning brief, when one exists (additive, optional). */
+  brief?: { id: string; title: string }
 }
 
 export function buildToday(input: {
@@ -33,6 +35,7 @@ export function buildToday(input: {
   timelineEvents: TimelineEventOut[]
   inboxCount: number
   now: Date
+  brief?: { id: string; title: string }
 }): TodayOut {
   const { now } = input
   const deadlines: UpcomingDeadlineOut[] = []
@@ -74,5 +77,6 @@ export function buildToday(input: {
     agentActivity,
     inboxCount: input.inboxCount,
     generatedAt: toWarsawIso(now),
+    ...(input.brief !== undefined ? { brief: input.brief } : {}),
   }
 }

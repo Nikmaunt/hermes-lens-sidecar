@@ -21,6 +21,7 @@ export interface Paths {
   subscriptionsPath: string
   decisionsPath: string
   remindersPath: string
+  briefsDir: string
   lensQueueDir: string
   lastSyncPath: string
   gatewayStatePath: string
@@ -47,6 +48,7 @@ export function makePaths(cfg: Config): Paths {
     subscriptionsPath: join(v, 'subscriptions.md'),
     decisionsPath: join(v, 'decisions.md'),
     remindersPath: join(v, 'system', 'reminders.json'),
+    briefsDir: join(v, 'system', 'briefs'),
     lensQueueDir: join(v, 'system', 'lens-queue'),
     lastSyncPath: join(v, 'system', 'last-sync.json'),
     gatewayStatePath: join(h, 'gateway_state.json'),

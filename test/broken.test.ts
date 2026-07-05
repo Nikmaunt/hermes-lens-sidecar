@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ZodType } from 'zod'
 import {
   AgentStatus,
+  BriefsResponse,
   DecisionsResponse,
   DocumentsResponse,
   HabitsResponse,
@@ -32,6 +33,7 @@ beforeAll(async () => {
   env = await buildEnv()
   copyFileSync(fixturePath('broken', 'inbox-torn-frontmatter.md'), join(env.paths.inboxDir, 'torn-note.md'))
   copyFileSync(fixturePath('broken', 'inbox-bad-yaml.md'), join(env.paths.inboxDir, 'bad-yaml-note.md'))
+  copyFileSync(fixturePath('broken', 'inbox-torn-frontmatter.md'), join(env.paths.briefsDir, 'torn-brief.md'))
   copyFileSync(fixturePath('broken', 'reminders-naive-datetime.json'), env.paths.remindersPath)
   copyFileSync(fixturePath('broken', 'gateway_state-torn.json'), env.paths.gatewayStatePath)
   copyFileSync(fixturePath('broken', 'jobs-torn.json'), env.paths.jobsPath)
@@ -55,6 +57,7 @@ const ENDPOINTS: { path: string; schema: ZodType }[] = [
   { path: '/api/decisions', schema: DecisionsResponse },
   { path: '/api/habits', schema: HabitsResponse },
   { path: '/api/polish-words', schema: PolishWordsResponse },
+  { path: '/api/briefs', schema: BriefsResponse },
   { path: '/api/inbox', schema: InboxResponse },
   { path: '/api/reminders', schema: RemindersResponse },
   { path: '/api/search?q=%D0%B1%D0%B0%D0%BD%D0%BA', schema: SearchResponse },

@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ZodType } from 'zod'
 import {
   AgentStatus,
+  BriefDetail,
+  BriefsResponse,
   CaptureResponse,
   DecisionsResponse,
   DocumentsResponse,
@@ -41,6 +43,8 @@ const GET_ENDPOINTS: { path: string; schema: ZodType }[] = [
   { path: '/api/decisions', schema: DecisionsResponse },
   { path: '/api/habits', schema: HabitsResponse },
   { path: '/api/polish-words', schema: PolishWordsResponse },
+  { path: '/api/briefs', schema: BriefsResponse },
+  { path: `/api/briefs/${toWarsawDate(new Date())}-morning`, schema: BriefDetail },
   { path: '/api/inbox', schema: InboxResponse },
   { path: '/api/reminders', schema: RemindersResponse },
   { path: '/api/search?q=%D0%BA%D0%BE%D1%84%D0%B5', schema: SearchResponse },

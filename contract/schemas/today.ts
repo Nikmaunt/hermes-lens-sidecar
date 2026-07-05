@@ -43,5 +43,7 @@ export const TodaySummary = z.object({
   agentActivity: z.array(AgentActivityItem), // last 24 h, newest first
   inboxCount: z.int().nonnegative(),
   generatedAt: IsoDateTime,
+  /** Today's freshest morning brief, when one exists (additive, optional). */
+  brief: z.object({ id: Id, title: z.string() }).optional(),
 })
 export type TodaySummary = z.infer<typeof TodaySummary>

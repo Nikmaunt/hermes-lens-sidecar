@@ -11,6 +11,7 @@ import { readInbox } from './readers/inbox.js'
 import { readMemory } from './readers/memory.js'
 import { buildStatus, readCronJobs } from './readers/status.js'
 import { readFollowups, readPeople, readSubscriptions, inboxFileEvents } from './readers/vault.js'
+import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
 import { runSearch } from './domain/search.js'
@@ -83,6 +84,12 @@ async function currentInbox(ctx: Ctx): Promise<Awaited<ReturnType<typeof readInb
 
 async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse): Promise<number> {
   const now = ctx.now()
+  const briefId = /^\/api\/briefs\/([^/]+)$/.exec(path)
+  if (briefId !== null) {
+    const brief = readBrief(ctx.paths.briefsDir, decodeURIComponent(briefId[1] ?? ''), ctx.log)
+    if (brief === undefined) return respond(res, 404, { error: 'not found' })
+    return respond(res, 200, brief)
+  }
   switch (path) {
     case '/api/status': {
       const body = await buildStatus(ctx.paths, ctx.statedb.allSessions(), now, ctx.log)
@@ -97,12 +104,14 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
         const pending = queue.followupActions.get(f.id)
         return pending === undefined ? f : { ...f, pendingAction: pending }
       })
+      const brief = todayMorningBrief(ctx.paths.briefsDir, now, ctx.log)
       const body = buildToday({
         followUps,
         documents: readSubscriptions(ctx.paths.subscriptionsPath, ctx.log),
         timelineEvents: events,
         inboxCount: inbox.length,
         now,
+        ...(brief !== undefined ? { brief } : {}),
       })
       return respond(res, 200, body)
     }
@@ -152,6 +161,8 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
     case '/api/polish-words':
       // EMPTY-VALID: no flashcard source exists on the VPS yet.
       return respond(res, 200, { words: [] })
+    case '/api/briefs':
+      return respond(res, 200, { items: readBriefs(ctx.paths.briefsDir, now, ctx.log) })
     case '/api/inbox':
       return respond(res, 200, { items: await currentInbox(ctx) })
     case '/api/reminders':

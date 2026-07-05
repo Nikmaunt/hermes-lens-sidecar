@@ -26,6 +26,8 @@ export interface TestEnv {
   logs: string[]
   /** What buildStateDb inserted — lets tests recompute expected spend. */
   sessionSpecs: SessionSpec[]
+  /** Dates of the date-relative brief fixtures (recent = in window, old = outside). */
+  briefDates: { recent: string; old: string }
   close(): Promise<void>
   get(path: string, token?: string | null): Promise<{ status: number; json: unknown }>
   post(path: string, body: unknown, token?: string | null): Promise<{ status: number; json: unknown }>
@@ -126,6 +128,25 @@ export async function buildEnv(): Promise<TestEnv> {
 
   writeFileSync(join(hermesDir, 'cron', 'ticker_heartbeat'), (Date.now() / 1000).toFixed(3), 'utf8')
   const today = warsawDatePlus(0)
+
+  const briefsDir = join(vaultDir, 'system', 'briefs')
+  const briefDates = { recent: warsawDatePlus(-5), old: warsawDatePlus(-120) }
+  mkdirSync(briefsDir, { recursive: true })
+  writeFileSync(
+    join(briefsDir, `${today}-morning.md`),
+    `---\ndate: ${today}\ntitle: Утренний бриф\nkind: morning\n---\n\n## Главное\n\n- задачи дня\n`,
+    'utf8',
+  )
+  writeFileSync(
+    join(briefsDir, `${briefDates.recent}-rynok.md`),
+    `---\ndate: ${briefDates.recent}\ntitle: Обзор рынка\n---\n\nТело обзора.\n`,
+    'utf8',
+  )
+  writeFileSync(
+    join(briefsDir, `${briefDates.old}-staryy.md`),
+    `---\ndate: ${briefDates.old}\ntitle: Старый бриф\nkind: morning\n---\n\nСтарое тело.\n`,
+    'utf8',
+  )
   writeFileSync(join(backupsDir, `state-${today}.db`), 'x'.repeat(1024), 'utf8')
   writeFileSync(join(backupsDir, `vault-${today}.tar.gz`), 'y'.repeat(2048), 'utf8')
   const sessionSpecs = buildStateDb(join(hermesDir, 'state.db'))
@@ -171,6 +192,7 @@ export async function buildEnv(): Promise<TestEnv> {
     paths: makePaths(cfg),
     logs,
     sessionSpecs,
+    briefDates,
     async close() {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       try {
