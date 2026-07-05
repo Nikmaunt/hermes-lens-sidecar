@@ -22,6 +22,7 @@ import {
   TimelineResponse,
   TodaySummary,
   TriageResponse,
+  UntriageResponse,
 } from '../contract/schemas/index'
 import { buildEnv, type TestEnv } from './helpers/env'
 import { toWarsawDate } from '../src/lib/time.js'
@@ -153,6 +154,51 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(HabitTickResponse.parse(r.json)).toEqual({ status: 'ok', itemId: 'hab-zaryadka' })
     console.log('  ✓ POST /api/habits/{id}/tick — 401/401/200, schema-valid')
+  })
+
+  it('POST /api/followups/{id}/action {action:"undo"} → FollowupActionResponse, 401s', async () => {
+    const today = TodaySummary.parse((await env.get('/api/today')).json)
+    const fu = today.followUps.at(-1) // done was queued for it above → undo answers ok
+
+    const noToken = await env.post(`/api/followups/${fu?.id}/action`, { action: 'undo' }, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post(
+      `/api/followups/${fu?.id}/action`,
+      { action: 'undo' },
+      'wrong-token-wrong-token-wrong',
+    )
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post(`/api/followups/${fu?.id}/action`, { action: 'undo' })
+    expect(r.status).toBe(200)
+    expect(FollowupActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: fu?.id })
+    console.log('  ✓ POST /api/followups/{id}/action undo — 401/401/200, schema-valid')
+  })
+
+  it('POST /api/habits/{id}/tick {undo:true} → HabitTickResponse, 401s', async () => {
+    const body = { date: '2026-01-02', undo: true } // pending tick from the test above
+    const noToken = await env.post('/api/habits/hab-zaryadka/tick', body, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post('/api/habits/hab-zaryadka/tick', body, 'wrong-token-wrong-token-wrong')
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post('/api/habits/hab-zaryadka/tick', body)
+    expect(r.status).toBe(200)
+    expect(HabitTickResponse.parse(r.json)).toEqual({ status: 'ok', itemId: 'hab-zaryadka' })
+    console.log('  ✓ POST /api/habits/{id}/tick undo — 401/401/200, schema-valid')
+  })
+
+  it('POST /api/inbox/{id}/untriage → UntriageResponse, 401s', async () => {
+    expect(capturedId).not.toBe('') // triaged above → untriage answers ok
+    const noToken = await env.post(`/api/inbox/${capturedId}/untriage`, {}, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post(`/api/inbox/${capturedId}/untriage`, {}, 'wrong-token-wrong-token-wrong')
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post(`/api/inbox/${capturedId}/untriage`, {})
+    expect(r.status).toBe(200)
+    expect(UntriageResponse.parse(r.json)).toEqual({ status: 'ok', itemId: capturedId })
+    console.log('  ✓ POST /api/inbox/{id}/untriage — 401/401/200, schema-valid')
   })
 
   it('POST /api/sync/ack → SyncAckResponse', async () => {

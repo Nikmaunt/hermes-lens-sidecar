@@ -13,10 +13,16 @@ import { dirname, resolve, sep } from 'node:path'
  *   4. its own private data dir (ledger, journal)
  * Everything else — state.db, ~/.hermes/*, existing vault notes — is
  * strictly read-only, and Writer refuses paths outside the allowlist.
+ *
+ * DELETION is narrower still: the ONLY root where files may be removed is
+ * vault/system/lens-queue/ — undo of a still-pending request deletes its
+ * queue file (which this sidecar itself created). Notes, ledger, journal
+ * and last-sync.json can never be deleted through Writer.
  */
 export class Writer {
   private readonly allowedDirs: string[]
   private readonly allowedFiles: Set<string>
+  private readonly deleteRoot: string
 
   constructor(opts: {
     inboxDir: string
@@ -29,6 +35,7 @@ export class Writer {
       resolve(opts.lastSyncPath),
       resolve(opts.lastSyncPath + '.tmp'),
     ])
+    this.deleteRoot = resolve(opts.lensQueueDir)
   }
 
   private assertAllowed(path: string): string {
@@ -58,6 +65,27 @@ export class Writer {
     const tmp = this.assertAllowed(path + '.tmp')
     writeFileSync(tmp, content, { encoding: 'utf8' })
     renameSync(tmp, target)
+  }
+
+  /**
+   * Delete one queue file — the undo primitive. Same direct-child rule as
+   * writes (resolved path must sit immediately under lens-queue, no
+   * subdirectories, no traversal); anything else is refused.
+   * Returns false when the file is already gone (the agent consumed it
+   * first, or a concurrent undo won) — callers answer "gone".
+   */
+  deleteQueueFile(path: string): boolean {
+    const p = resolve(path)
+    if (!p.startsWith(this.deleteRoot + sep) || p.slice(this.deleteRoot.length + 1).includes(sep)) {
+      throw new Error(`delete refused, path outside lens-queue: ${p}`)
+    }
+    try {
+      rmSync(p)
+      return true
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw err
+    }
   }
 
   appendLine(path: string, line: string): void {

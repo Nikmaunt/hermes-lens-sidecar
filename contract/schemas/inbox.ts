@@ -29,3 +29,18 @@ export const TriageResponse = z.object({
   itemId: Id,
 })
 export type TriageResponse = z.infer<typeof TriageResponse>
+
+/** Body of POST /api/inbox/{id}/untriage — intentionally empty. */
+export const UntriageRequest = z.object({})
+export type UntriageRequest = z.infer<typeof UntriageRequest>
+
+export const UntriageResponse = z.object({
+  /**
+   * "ok" = the pending triage was cancelled and the item is visible in the
+   * inbox again; "gone" = nothing was pending (already processed by the
+   * agent, or never triaged) — the client treats both as success.
+   */
+  status: z.enum(['ok', 'gone']),
+  itemId: Id,
+})
+export type UntriageResponse = z.infer<typeof UntriageResponse>

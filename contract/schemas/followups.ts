@@ -8,6 +8,16 @@ export const FollowupActionRequest = z.object({
 })
 export type FollowupActionRequest = z.infer<typeof FollowupActionRequest>
 
+export const FollowupUndoRequest = z.object({
+  /**
+   * Cancel a queued done/snooze while the agent has not processed it yet
+   * (its lens-queue file still exists). After processing, undo answers
+   * "gone" — the action is no longer pending and cannot be recalled.
+   */
+  action: z.literal('undo'),
+})
+export type FollowupUndoRequest = z.infer<typeof FollowupUndoRequest>
+
 export const FollowupActionResponse = z.object({
   /**
    * "ok" = queued for the agent; "gone" = the follow-up no longer exists

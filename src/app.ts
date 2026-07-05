@@ -24,7 +24,13 @@ import { runSearch } from './domain/search.js'
 import { Writer } from './writes/fswrite.js'
 import { readJournal } from './writes/journal.js'
 import { handleCapture } from './writes/capture.js'
-import { handleFlag, handleFollowupAction, handleHabitTick, handleTriage } from './writes/queue.js'
+import {
+  handleFlag,
+  handleFollowupAction,
+  handleHabitTick,
+  handleTriage,
+  handleUntriage,
+} from './writes/queue.js'
 import { handleSyncAck } from './writes/syncack.js'
 
 const MAX_BODY_BYTES = 256 * 1024
@@ -237,6 +243,11 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
   const triage = /^\/api\/inbox\/([^/]+)\/triage$/.exec(path)
   if (triage !== null) {
     const r = handleTriage(deps, decodeURIComponent(triage[1] ?? ''), body)
+    return respond(res, r.status, r.body)
+  }
+  const untriage = /^\/api\/inbox\/([^/]+)\/untriage$/.exec(path)
+  if (untriage !== null) {
+    const r = handleUntriage(deps, decodeURIComponent(untriage[1] ?? ''))
     return respond(res, r.status, r.body)
   }
   const flag = /^\/api\/memory\/([^/]+)\/flag$/.exec(path)

@@ -8,7 +8,15 @@ import type { Writer } from './fswrite.js'
  * /api/timeline. Never contains note text or tokens — only slugs/ids.
  */
 
-const JOURNAL_TYPES = ['capture', 'triage', 'flag', 'ack', 'followup-action', 'habit-tick'] as const
+const JOURNAL_TYPES = [
+  'capture',
+  'triage',
+  'flag',
+  'ack',
+  'followup-action',
+  'followup-undo',
+  'habit-tick',
+] as const
 
 export interface JournalEntry {
   type: (typeof JOURNAL_TYPES)[number]

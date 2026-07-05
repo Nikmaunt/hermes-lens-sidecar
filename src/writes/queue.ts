@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { toWarsawIso } from '../lib/time.js'
-import { readQueueState } from '../readers/queuestate.js'
+import { readQueueState, type PendingQueueFile } from '../readers/queuestate.js'
 import { readFollowupLines } from '../readers/vault.js'
 import { readHabits } from '../readers/habits.js'
 import type { Logger } from '../lib/log.js'
@@ -25,6 +25,24 @@ export interface HandlerResult {
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/
 
 const TRIAGE_DESTINATIONS = new Set(['note', 'task', 'memory', 'archive', 'trash'])
+
+/**
+ * Undo primitive: delete every still-pending queue file matching the
+ * predicate. Returns true if at least one file was actually removed —
+ * false means there was nothing pending (the agent already consumed it,
+ * or nothing was ever queued) and the caller answers "gone".
+ */
+function deletePendingFiles(
+  deps: { paths: Paths; writer: Writer; log: Logger },
+  match: (f: PendingQueueFile) => boolean,
+): boolean {
+  const queue = readQueueState(deps.paths.lensQueueDir, deps.log)
+  let removed = false
+  for (const f of queue.pendingFiles) {
+    if (match(f)) removed = deps.writer.deleteQueueFile(f.path) || removed
+  }
+  return removed
+}
 
 function writeQueueFile(writer: Writer, dir: string, kind: string, itemId: string, payload: object): void {
   for (let bump = 0; bump < 5; bump++) {
@@ -91,8 +109,25 @@ export function handleFollowupAction(
   if (!ID_RE.test(itemId)) return { status: 400, body: { error: 'invalid item id' } }
   const req = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
   const action = req.action
-  if (action !== 'done' && action !== 'snooze') {
+  if (action !== 'done' && action !== 'snooze' && action !== 'undo') {
     return { status: 400, body: { error: 'invalid action' } }
+  }
+
+  if (action === 'undo') {
+    // Undo = delete the pending queue file(s) of this item. An action the
+    // agent already consumed has no file left → gone (cannot be recalled).
+    const removed = deletePendingFiles(deps, (f) => f.type === 'followup' && f.itemId === itemId)
+    if (!removed) return { status: 200, body: { status: 'gone', itemId } }
+    const undoneAt = toWarsawIso(now)
+    appendJournal(writer, paths.journalPath, {
+      type: 'followup-undo',
+      at: undoneAt,
+      title: 'Follow-up action undone',
+      detail: `${itemId} → undo`,
+      relatedId: itemId,
+    })
+    log.info('followup action undone', { itemId })
+    return { status: 200, body: { status: 'ok', itemId } }
   }
   let until: string | undefined
   if (action === 'snooze') {
@@ -152,6 +187,21 @@ export function handleHabitTick(
     return { status: 400, body: { error: 'date must be a valid YYYY-MM-DD' } }
   }
   const date = req.date
+  if (req.undo !== undefined && req.undo !== true) {
+    return { status: 400, body: { error: 'undo must be true when present' } }
+  }
+
+  if (req.undo === true) {
+    // Undo recalls only a PENDING tick (queue file still unconsumed). A date
+    // already recorded in habits.md is not pending — nothing to delete, gone.
+    const removed = deletePendingFiles(
+      deps,
+      (f) => f.type === 'habit-tick' && f.itemId === habitId && f.date === date,
+    )
+    if (!removed) return { status: 200, body: { status: 'gone', itemId: habitId } }
+    log.info('habit tick undone', { habitId, date })
+    return { status: 200, body: { status: 'ok', itemId: habitId } }
+  }
 
   // Completed dates are a union, so a tick is naturally idempotent: already
   // pending or already recorded in habits.md → same success, no new file.
@@ -187,6 +237,21 @@ export function handleHabitTick(
   })
   log.info('habit tick queued', { habitId, date })
   return { status: 200, body: { status: 'ok', itemId: habitId } }
+}
+
+export function handleUntriage(
+  deps: { paths: Paths; writer: Writer; log: Logger; now: Date },
+  itemId: string,
+): HandlerResult {
+  const { log } = deps
+  if (!ID_RE.test(itemId)) return { status: 400, body: { error: 'invalid item id' } }
+  // Undo of a pending triage: the hide-from-inbox overlay lives only as the
+  // queue file, so deleting it makes the note visible again on the next GET.
+  // Repeat untriage (or one racing the agent's cron) finds no file → gone.
+  const removed = deletePendingFiles(deps, (f) => f.type === 'triage' && f.itemId === itemId)
+  if (!removed) return { status: 200, body: { status: 'gone', itemId } }
+  log.info('triage undone', { itemId })
+  return { status: 200, body: { status: 'ok', itemId } }
 }
 
 export function handleFlag(
