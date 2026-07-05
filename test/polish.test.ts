@@ -68,10 +68,12 @@ describe('GET /api/polish-words', () => {
     expect(parsed.words.every((w) => w.id.startsWith('pw-'))).toBe(true)
   })
 
-  it('garbage file → 200 with empty list', async () => {
-    writeFileSync(env.paths.polishWordsPath, '||| мусор |||\nне списковая строка\n- | | | (added: )\n', 'utf8')
-    const r = await env.get('/api/polish-words')
-    expect(r.status).toBe(200)
-    expect(PolishWordsResponse.parse(r.json).words).toEqual([])
+  it('garbage or empty file → 200 with empty list', async () => {
+    for (const content of ['||| мусор |||\nне списковая строка\n- | | | (added: )\n', '']) {
+      writeFileSync(env.paths.polishWordsPath, content, 'utf8')
+      const r = await env.get('/api/polish-words')
+      expect(r.status).toBe(200)
+      expect(PolishWordsResponse.parse(r.json).words).toEqual([])
+    }
   })
 })

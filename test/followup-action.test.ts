@@ -158,3 +158,10 @@ describe('followup action: gone semantics (offline replay, NOT 404)', () => {
     writeFileSync(env.paths.followupsPath, raw, 'utf8')
   })
 })
+
+describe('token hygiene on the new code paths', () => {
+  it('the bearer token never appears in any log line', () => {
+    expect(env.logs.length).toBeGreaterThan(0)
+    expect(env.logs.join('\n')).not.toContain(env.token)
+  })
+})

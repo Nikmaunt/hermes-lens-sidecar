@@ -98,12 +98,18 @@ describe('POST /api/habits/{id}/tick', () => {
 })
 
 describe('habits degradation', () => {
-  it('garbage habits.md → 200 with empty list', async () => {
+  it('garbage or empty habits.md → 200 with empty list', async () => {
     const original = readFileSync(env.paths.habitsPath, 'utf8')
-    writeFileSync(env.paths.habitsPath, ']]] не markdown\n- отметки: сироты без заголовка\n', 'utf8')
-    const r = await env.get('/api/habits')
-    expect(r.status).toBe(200)
-    expect(HabitsResponse.parse(r.json).habits).toEqual([])
+    for (const content of [']]] не markdown\n- отметки: сироты без заголовка\n', '']) {
+      writeFileSync(env.paths.habitsPath, content, 'utf8')
+      const r = await env.get('/api/habits')
+      expect(r.status).toBe(200)
+      expect(HabitsResponse.parse(r.json).habits).toEqual([])
+    }
     writeFileSync(env.paths.habitsPath, original, 'utf8')
+  })
+
+  it('the bearer token never appears in any log line (tick paths included)', () => {
+    expect(env.logs.join('\n')).not.toContain(env.token)
   })
 })

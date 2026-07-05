@@ -77,10 +77,12 @@ describe('GET /api/decisions', () => {
     expect(none.decisions).toEqual([])
   })
 
-  it('garbage decisions.md → 200 with empty list, never 500', async () => {
-    writeFileSync(env.paths.decisionsPath, ']]]труха\n- почему: без заголовка\n## тоже — не дата\n', 'utf8')
-    const r = await env.get('/api/decisions')
-    expect(r.status).toBe(200)
-    expect(DecisionsResponse.parse(r.json).decisions).toEqual([])
+  it('garbage or empty decisions.md → 200 with empty list, never 500', async () => {
+    for (const content of [']]]труха\n- почему: без заголовка\n## тоже — не дата\n', '']) {
+      writeFileSync(env.paths.decisionsPath, content, 'utf8')
+      const r = await env.get('/api/decisions')
+      expect(r.status).toBe(200)
+      expect(DecisionsResponse.parse(r.json).decisions).toEqual([])
+    }
   })
 })

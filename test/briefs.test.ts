@@ -99,4 +99,8 @@ describe('today.brief pointer', () => {
     const t = TodaySummary.parse((await env.get('/api/today')).json)
     expect(t.brief).toBeUndefined()
   })
+
+  it('the bearer token never appears in any log line (brief paths included)', () => {
+    expect(env.logs.join('\n')).not.toContain(env.token)
+  })
 })
