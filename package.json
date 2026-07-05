@@ -1,0 +1,27 @@
+{
+  "name": "hermes-lens-sidecar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Read-mostly API sidecar exposing the Hermes agent's vault and state to the Hermes Lens app",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/make-entry.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "start": "node dist/server.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "10.6.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "8.62.1",
+    "vitest": "4.1.9",
+    "zod": "4.4.3"
+  }
+}

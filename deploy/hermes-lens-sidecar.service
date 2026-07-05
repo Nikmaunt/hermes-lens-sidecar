@@ -1,0 +1,19 @@
+# systemd user unit for the Hermes Lens sidecar.
+# Install: cp deploy/hermes-lens-sidecar.service ~/.config/systemd/user/
+#          systemctl --user daemon-reload
+#          systemctl --user enable --now hermes-lens-sidecar
+# (user lingering is already enabled on the VPS — hermes-gateway uses it)
+
+[Unit]
+Description=Hermes Lens sidecar — read-mostly API bridge for the Lens app
+After=network-online.target
+
+[Service]
+# WorkingDirectory matters: the sidecar loads its own .env from cwd.
+WorkingDirectory=%h/hermes-lens-sidecar
+ExecStart=%h/.hermes/node/bin/node %h/hermes-lens-sidecar/dist/server.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

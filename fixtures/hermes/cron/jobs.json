@@ -1,0 +1,34 @@
+{
+  "jobs": [
+    {
+      "id": "inbox-triage",
+      "name": "Inbox triage",
+      "schedule_display": "daily 07:00",
+      "next_run_at": 1751690100.0,
+      "last_run_at": 1751603700.25,
+      "last_status": "ok",
+      "last_error": null,
+      "enabled": true
+    },
+    {
+      "id": "reminders-regen",
+      "name": "Regenerate reminders.json",
+      "schedule_display": "daily 07:00",
+      "next_run_at": 1751690100.0,
+      "last_run_at": 1751603760.9,
+      "last_status": "error",
+      "last_error": "timeout talking to vault",
+      "enabled": true
+    },
+    {
+      "id": "never-ran-yet",
+      "name": "Brand new job",
+      "schedule_display": "weekly",
+      "next_run_at": 1751990100.0,
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "enabled": true
+    }
+  ]
+}

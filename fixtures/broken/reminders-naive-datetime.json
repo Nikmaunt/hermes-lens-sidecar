@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-07-05T01:55:10+02:00",
+  "timezone": "Europe/Warsaw",
+  "reminders": [
+    {
+      "id": "good-one",
+      "title": "Валидное напоминание",
+      "datetime": "2026-07-06T09:00:00+02:00",
+      "criticality": "high",
+      "source": "good-one",
+      "category": "followup"
+    },
+    {
+      "id": "naive-datetime",
+      "title": "Наивная дата без офсета",
+      "datetime": "2026-07-06T09:00:00",
+      "criticality": "low",
+      "source": "naive-datetime",
+      "category": "followup"
+    },
+    {
+      "id": "missing-title",
+      "datetime": "2026-07-07T10:00:00+02:00",
+      "criticality": "low",
+      "source": "missing-title",
+      "category": "followup"
+    }
+  ]
+}

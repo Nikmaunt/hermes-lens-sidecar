@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    /* Bundler resolution so the verbatim schema mirror (extensionless relative
+       imports, copied 1:1 from hermes-lens) typechecks without edits. Vitest
+       resolves the same way. Only `npm run build` (tsconfig.json, NodeNext)
+       produces runtime output. */
+    "moduleResolution": "bundler",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "test", "contract", "vitest.config.ts"]
+}
