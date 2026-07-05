@@ -23,5 +23,10 @@ export const DocumentsResponse = z.object({
   items: z.array(DocumentItem),
   /** Total recurring spend normalized to per-month, one entry per currency. */
   monthlyTotal: z.array(Money),
+  /**
+   * Month-to-date actual spend per currency (additive, optional). Present
+   * iff the agent has a transactions file for the current month.
+   */
+  spentThisMonth: z.array(Money).optional(),
 })
 export type DocumentsResponse = z.infer<typeof DocumentsResponse>

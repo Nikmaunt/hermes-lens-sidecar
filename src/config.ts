@@ -23,6 +23,7 @@ export interface Paths {
   habitsPath: string
   polishWordsPath: string
   docsDir: string
+  financeDir: string
   remindersPath: string
   briefsDir: string
   lensQueueDir: string
@@ -53,6 +54,7 @@ export function makePaths(cfg: Config): Paths {
     habitsPath: join(v, 'habits.md'),
     polishWordsPath: join(v, 'polish-words.md'),
     docsDir: join(v, 'docs'),
+    financeDir: join(v, 'finance'),
     remindersPath: join(v, 'system', 'reminders.json'),
     briefsDir: join(v, 'system', 'briefs'),
     lensQueueDir: join(v, 'system', 'lens-queue'),

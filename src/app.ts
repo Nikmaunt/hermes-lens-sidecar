@@ -16,6 +16,7 @@ import { readDecisions } from './readers/decisions.js'
 import { readHabits } from './readers/habits.js'
 import { readPolishWords } from './readers/polish.js'
 import { readDocs } from './readers/docs.js'
+import { readMonthSpend } from './readers/transactions.js'
 import type { DocumentItemOut } from './readers/vault.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
@@ -161,7 +162,14 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
         totals.set(doc.amount.currency, (totals.get(doc.amount.currency) ?? 0) + perMonth)
       }
       const monthlyTotal = [...totals.entries()].map(([currency, cents]) => ({ currency, cents }))
-      return respond(res, 200, { items, monthlyTotal })
+      // spentThisMonth is present iff the current month's transactions file
+      // exists — field presence mirrors source presence.
+      const spentThisMonth = readMonthSpend(ctx.paths.financeDir, now, ctx.log)
+      return respond(res, 200, {
+        items,
+        monthlyTotal,
+        ...(spentThisMonth !== undefined ? { spentThisMonth } : {}),
+      })
     }
     case '/api/decisions': {
       const decisions = readDecisions(ctx.paths.decisionsPath, ctx.log)
