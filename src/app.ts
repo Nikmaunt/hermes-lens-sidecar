@@ -14,6 +14,7 @@ import { readFollowups, readPeople, readSubscriptions, inboxFileEvents } from '.
 import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
 import { readDecisions } from './readers/decisions.js'
 import { readHabits } from './readers/habits.js'
+import { readPolishWords } from './readers/polish.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
 import { runSearch } from './domain/search.js'
@@ -171,8 +172,7 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
       return respond(res, 200, { habits, generatedAt: toWarsawIso(now) })
     }
     case '/api/polish-words':
-      // EMPTY-VALID: no flashcard source exists on the VPS yet.
-      return respond(res, 200, { words: [] })
+      return respond(res, 200, { words: readPolishWords(ctx.paths.polishWordsPath, ctx.log) })
     case '/api/briefs':
       return respond(res, 200, { items: readBriefs(ctx.paths.briefsDir, now, ctx.log) })
     case '/api/inbox':
