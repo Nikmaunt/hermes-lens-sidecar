@@ -192,6 +192,8 @@ describe('contract semantics', () => {
       expect(item.text).not.toContain('---')
       expect(item.text).not.toContain('criticality')
       expect(item.text).not.toContain('<!--')
+      expect(item.text).not.toContain('[!question]')
+      expect(item.text).not.toContain('date:')
     }
     const visit = inbox.items.find((i) => i.id === 'osmotr-kotla-1900')
     expect(visit).toBeDefined()
