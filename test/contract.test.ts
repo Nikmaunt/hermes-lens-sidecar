@@ -6,6 +6,7 @@ import {
   DecisionsResponse,
   DocumentsResponse,
   FlagResponse,
+  FollowupActionResponse,
   HabitsResponse,
   InboxResponse,
   MemoryResponse,
@@ -111,6 +112,26 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(FlagResponse.parse(r.json)).toEqual({ status: 'pending', itemId: target?.id })
     console.log('  ✓ POST /api/memory/{id}/flag — 200, schema-valid')
+  })
+
+  it('POST /api/followups/{id}/action → FollowupActionResponse, 401 without/wrong token', async () => {
+    const today = TodaySummary.parse((await env.get('/api/today')).json)
+    const fu = today.followUps.at(-1)
+    expect(fu).toBeDefined()
+
+    const noToken = await env.post(`/api/followups/${fu?.id}/action`, { action: 'done' }, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post(
+      `/api/followups/${fu?.id}/action`,
+      { action: 'done' },
+      'wrong-token-wrong-token-wrong',
+    )
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post(`/api/followups/${fu?.id}/action`, { action: 'done' })
+    expect(r.status).toBe(200)
+    expect(FollowupActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: fu?.id })
+    console.log('  ✓ POST /api/followups/{id}/action — 401/401/200, schema-valid')
   })
 
   it('POST /api/sync/ack → SyncAckResponse', async () => {

@@ -109,7 +109,7 @@ export function collectEvents(input: {
     byId.set(id, {
       id,
       at: j.at,
-      category: j.type === 'capture' ? 'capture' : 'system',
+      category: j.type === 'capture' ? 'capture' : j.type === 'habit-tick' ? 'habit' : 'system',
       title: j.title,
       detail: j.detail,
       relatedId: j.relatedId,

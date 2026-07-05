@@ -1,6 +1,7 @@
 export * from './common'
 export * from './status'
 export * from './today'
+export * from './followups'
 export * from './timeline'
 export * from './memory'
 export * from './projects'

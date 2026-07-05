@@ -1,12 +1,21 @@
 import { z } from 'zod'
 import { EventCategory, Id, IsoDate, IsoDateTime } from './common'
 
+/** A done/snooze request queued for the agent (not yet executed). */
+export const FollowUpPendingAction = z.object({
+  action: z.enum(['done', 'snooze']),
+  until: IsoDate.optional(),
+  requestedAt: IsoDateTime,
+})
+export type FollowUpPendingAction = z.infer<typeof FollowUpPendingAction>
+
 export const FollowUp = z.object({
   id: Id,
   title: z.string(),
   dueDate: IsoDate.nullable(),
   source: z.string(), // where the follow-up came from, e.g. "telegram 12 Jun"
   urgency: z.enum(['overdue', 'today', 'soon']),
+  pendingAction: FollowUpPendingAction.optional(),
 })
 export type FollowUp = z.infer<typeof FollowUp>
 

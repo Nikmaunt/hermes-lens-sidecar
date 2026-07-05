@@ -15,14 +15,22 @@ export interface PendingFlagEntry {
   requestedAt: string
 }
 
+export interface PendingFollowupAction {
+  action: 'done' | 'snooze'
+  until?: string
+  requestedAt: string
+}
+
 export interface QueueState {
   triagedItemIds: Set<string>
   /** itemId → latest pending flag. */
   flags: Map<string, PendingFlagEntry>
+  /** followup itemId → latest pending done/snooze request. */
+  followupActions: Map<string, PendingFollowupAction>
 }
 
 export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
-  const state: QueueState = { triagedItemIds: new Set(), flags: new Map() }
+  const state: QueueState = { triagedItemIds: new Set(), flags: new Map(), followupActions: new Map() }
   const files = listFiles(lensQueueDir, log)
   files.sort((a, b) => a.name.localeCompare(b.name)) // ts-prefixed → chronological
   for (const f of files) {
@@ -33,6 +41,16 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
       const q = JSON.parse(raw) as Record<string, unknown>
       if (q.type === 'triage' && typeof q.itemId === 'string') {
         state.triagedItemIds.add(q.itemId)
+      } else if (
+        q.type === 'followup' &&
+        typeof q.itemId === 'string' &&
+        (q.action === 'done' || q.action === 'snooze')
+      ) {
+        state.followupActions.set(q.itemId, {
+          action: q.action,
+          ...(typeof q.until === 'string' ? { until: q.until } : {}),
+          requestedAt: typeof q.requestedAt === 'string' ? q.requestedAt : '1970-01-01T01:00:00+01:00',
+        })
       } else if (
         q.type === 'flag' &&
         typeof q.itemId === 'string' &&

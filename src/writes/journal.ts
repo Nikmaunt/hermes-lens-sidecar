@@ -8,8 +8,10 @@ import type { Writer } from './fswrite.js'
  * /api/timeline. Never contains note text or tokens — only slugs/ids.
  */
 
+const JOURNAL_TYPES = ['capture', 'triage', 'flag', 'ack', 'followup-action', 'habit-tick'] as const
+
 export interface JournalEntry {
-  type: 'capture' | 'triage' | 'flag' | 'ack'
+  type: (typeof JOURNAL_TYPES)[number]
   at: string
   title: string
   detail: string | null
@@ -35,14 +37,11 @@ export function readJournal(journalPath: string, log: Logger): JournalRecord[] {
     if (line === '') continue
     try {
       const e = JSON.parse(line) as Record<string, unknown>
-      if (
-        (e.type === 'capture' || e.type === 'triage' || e.type === 'flag' || e.type === 'ack') &&
-        typeof e.at === 'string' &&
-        typeof e.title === 'string'
-      ) {
+      const type = JOURNAL_TYPES.find((t) => t === e.type)
+      if (type !== undefined && typeof e.at === 'string' && typeof e.title === 'string') {
         out.push({
           id: `jrnl-${i}`,
-          type: e.type,
+          type,
           at: e.at,
           title: e.title,
           detail: typeof e.detail === 'string' ? e.detail : null,

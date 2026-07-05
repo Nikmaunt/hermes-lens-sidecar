@@ -7,12 +7,20 @@ import type { Logger } from '../lib/log.js'
 
 /* ------------------------------- follow-ups ------------------------------ */
 
+export interface FollowUpPendingActionOut {
+  action: 'done' | 'snooze'
+  until?: string
+  requestedAt: string
+}
+
 export interface FollowUpOut {
   id: string
   title: string
   dueDate: string | null
   source: string
   urgency: 'overdue' | 'today' | 'soon'
+  /** Set while a done/snooze queue file awaits the agent (overlay). */
+  pendingAction?: FollowUpPendingActionOut
 }
 
 /**
@@ -34,6 +42,26 @@ function stripCriticalityTail(title: string): string {
   }
 }
 
+const FOLLOWUP_LINE_RE = /^- \[ \] \[\[(\d{4}-\d{2}-\d{2})\]\]\s*[—-]\s*(.+)$/
+
+/**
+ * Active followups.md lines keyed by their content-hash id (fu-<sha256/10>).
+ * The verbatim line is what a followup-action queue file must carry — the
+ * agent cannot recompute the hash, it matches by line text.
+ */
+export function readFollowupLines(path: string, log: Logger): Map<string, string> {
+  const map = new Map<string, string>()
+  const raw = readTextIfExists(path, log)
+  if (raw === undefined) return map
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t.startsWith('- [') || /^- \[[xX]\]/.test(t)) continue
+    if (!FOLLOWUP_LINE_RE.test(t)) continue
+    map.set('fu-' + shortHash(t, 10), t)
+  }
+  return map
+}
+
 /**
  * followups.md lines, per the agent's vault-automation SKILL.md:
  *   `- [ ] [[YYYY-MM-DD]] — <description> (from [[NoteName]])`
@@ -48,7 +76,7 @@ export function readFollowups(path: string, now: Date, log: Logger): FollowUpOut
     const t = line.trim()
     if (!t.startsWith('- [')) continue
     if (/^- \[[xX]\]/.test(t)) continue // done
-    const m = /^- \[ \] \[\[(\d{4}-\d{2}-\d{2})\]\]\s*[—-]\s*(.+)$/.exec(t)
+    const m = FOLLOWUP_LINE_RE.exec(t)
     if (m === null) {
       log.warn('followup line skipped: unrecognized format')
       continue

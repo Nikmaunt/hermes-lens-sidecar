@@ -17,7 +17,7 @@ import { runSearch } from './domain/search.js'
 import { Writer } from './writes/fswrite.js'
 import { readJournal } from './writes/journal.js'
 import { handleCapture } from './writes/capture.js'
-import { handleFlag, handleTriage } from './writes/queue.js'
+import { handleFlag, handleFollowupAction, handleTriage } from './writes/queue.js'
 import { handleSyncAck } from './writes/syncack.js'
 
 const MAX_BODY_BYTES = 256 * 1024
@@ -90,8 +90,15 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
     }
     case '/api/today': {
       const [events, inbox] = await Promise.all([timelineEvents(ctx), currentInbox(ctx)])
+      // Overlay: while a done/snooze queue file awaits the agent, the item
+      // is served WITH pendingAction (mirrors pendingFlag on memory items).
+      const queue = readQueueState(ctx.paths.lensQueueDir, ctx.log)
+      const followUps = readFollowups(ctx.paths.followupsPath, now, ctx.log).map((f) => {
+        const pending = queue.followupActions.get(f.id)
+        return pending === undefined ? f : { ...f, pendingAction: pending }
+      })
       const body = buildToday({
-        followUps: readFollowups(ctx.paths.followupsPath, now, ctx.log),
+        followUps,
         documents: readSubscriptions(ctx.paths.subscriptionsPath, ctx.log),
         timelineEvents: events,
         inboxCount: inbox.length,
@@ -194,6 +201,11 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
   const flag = /^\/api\/memory\/([^/]+)\/flag$/.exec(path)
   if (flag !== null) {
     const r = handleFlag(deps, decodeURIComponent(flag[1] ?? ''), body)
+    return respond(res, r.status, r.body)
+  }
+  const followupAction = /^\/api\/followups\/([^/]+)\/action$/.exec(path)
+  if (followupAction !== null) {
+    const r = handleFollowupAction(deps, decodeURIComponent(followupAction[1] ?? ''), body)
     return respond(res, r.status, r.body)
   }
   return respond(res, 404, { error: 'not found' })
