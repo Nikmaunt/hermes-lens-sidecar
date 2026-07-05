@@ -17,3 +17,18 @@ export const HabitsResponse = z.object({
   generatedAt: IsoDateTime,
 })
 export type HabitsResponse = z.infer<typeof HabitsResponse>
+
+export const HabitTickRequest = z.object({
+  date: IsoDate,
+})
+export type HabitTickRequest = z.infer<typeof HabitTickRequest>
+
+export const HabitTickResponse = z.object({
+  /**
+   * "ok" = queued (or already recorded); "gone" = the habit no longer
+   * exists server-side — the client treats it as success.
+   */
+  status: z.enum(['ok', 'gone']),
+  itemId: Id,
+})
+export type HabitTickResponse = z.infer<typeof HabitTickResponse>

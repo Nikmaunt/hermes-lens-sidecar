@@ -20,6 +20,7 @@ export interface Paths {
   followupsPath: string
   subscriptionsPath: string
   decisionsPath: string
+  habitsPath: string
   remindersPath: string
   briefsDir: string
   lensQueueDir: string
@@ -47,6 +48,7 @@ export function makePaths(cfg: Config): Paths {
     followupsPath: join(v, 'followups.md'),
     subscriptionsPath: join(v, 'subscriptions.md'),
     decisionsPath: join(v, 'decisions.md'),
+    habitsPath: join(v, 'habits.md'),
     remindersPath: join(v, 'system', 'reminders.json'),
     briefsDir: join(v, 'system', 'briefs'),
     lensQueueDir: join(v, 'system', 'lens-queue'),

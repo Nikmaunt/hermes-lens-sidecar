@@ -27,10 +27,17 @@ export interface QueueState {
   flags: Map<string, PendingFlagEntry>
   /** followup itemId → latest pending done/snooze request. */
   followupActions: Map<string, PendingFollowupAction>
+  /** habitId → dates with a pending tick (unioned into completedDates). */
+  habitTicks: Map<string, Set<string>>
 }
 
 export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
-  const state: QueueState = { triagedItemIds: new Set(), flags: new Map(), followupActions: new Map() }
+  const state: QueueState = {
+    triagedItemIds: new Set(),
+    flags: new Map(),
+    followupActions: new Map(),
+    habitTicks: new Map(),
+  }
   const files = listFiles(lensQueueDir, log)
   files.sort((a, b) => a.name.localeCompare(b.name)) // ts-prefixed → chronological
   for (const f of files) {
@@ -51,6 +58,14 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
           ...(typeof q.until === 'string' ? { until: q.until } : {}),
           requestedAt: typeof q.requestedAt === 'string' ? q.requestedAt : '1970-01-01T01:00:00+01:00',
         })
+      } else if (
+        q.type === 'habit-tick' &&
+        typeof q.habitId === 'string' &&
+        typeof q.date === 'string'
+      ) {
+        const dates = state.habitTicks.get(q.habitId) ?? new Set<string>()
+        dates.add(q.date)
+        state.habitTicks.set(q.habitId, dates)
       } else if (
         q.type === 'flag' &&
         typeof q.itemId === 'string' &&

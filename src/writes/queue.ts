@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { toWarsawIso } from '../lib/time.js'
 import { readQueueState } from '../readers/queuestate.js'
 import { readFollowupLines } from '../readers/vault.js'
+import { readHabits } from '../readers/habits.js'
 import type { Logger } from '../lib/log.js'
 import type { Paths } from '../config.js'
 import type { Writer } from './fswrite.js'
@@ -137,6 +138,55 @@ export function handleFollowupAction(
   })
   log.info('followup action queued', { itemId, action })
   return { status: 200, body: { status: 'ok', itemId } }
+}
+
+export function handleHabitTick(
+  deps: { paths: Paths; writer: Writer; log: Logger; now: Date },
+  habitId: string,
+  body: unknown,
+): HandlerResult {
+  const { paths, writer, log, now } = deps
+  if (!ID_RE.test(habitId)) return { status: 400, body: { error: 'invalid habit id' } }
+  const req = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+  if (typeof req.date !== 'string' || !isValidIsoDate(req.date)) {
+    return { status: 400, body: { error: 'date must be a valid YYYY-MM-DD' } }
+  }
+  const date = req.date
+
+  // Completed dates are a union, so a tick is naturally idempotent: already
+  // pending or already recorded in habits.md → same success, no new file.
+  const queue = readQueueState(paths.lensQueueDir, log)
+  if (queue.habitTicks.get(habitId)?.has(date) === true) {
+    return { status: 200, body: { status: 'ok', itemId: habitId } }
+  }
+  const habit = readHabits(paths.habitsPath, log).find((h) => h.id === habitId)
+  if (habit === undefined) {
+    // success-by-staleness for offline replays — see handleFollowupAction
+    return { status: 200, body: { status: 'gone', itemId: habitId } }
+  }
+  if (habit.completedDates.includes(date)) {
+    return { status: 200, body: { status: 'ok', itemId: habitId } }
+  }
+
+  const requestedAt = toWarsawIso(now)
+  writeQueueFile(writer, paths.lensQueueDir, 'habit-tick', habitId, {
+    type: 'habit-tick',
+    habitId,
+    // Verbatim name from habits.md — the agent matches the block by name,
+    // it cannot recompute the translit slug.
+    habitName: habit.name,
+    date,
+    requestedAt,
+  })
+  appendJournal(writer, paths.journalPath, {
+    type: 'habit-tick',
+    at: requestedAt,
+    title: 'Habit tick queued',
+    detail: `${habitId} → ${date}`,
+    relatedId: habitId,
+  })
+  log.info('habit tick queued', { habitId, date })
+  return { status: 200, body: { status: 'ok', itemId: habitId } }
 }
 
 export function handleFlag(

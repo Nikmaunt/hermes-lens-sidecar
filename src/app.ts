@@ -13,13 +13,14 @@ import { buildStatus, readCronJobs } from './readers/status.js'
 import { readFollowups, readPeople, readSubscriptions, inboxFileEvents } from './readers/vault.js'
 import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
 import { readDecisions } from './readers/decisions.js'
+import { readHabits } from './readers/habits.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
 import { runSearch } from './domain/search.js'
 import { Writer } from './writes/fswrite.js'
 import { readJournal } from './writes/journal.js'
 import { handleCapture } from './writes/capture.js'
-import { handleFlag, handleFollowupAction, handleTriage } from './writes/queue.js'
+import { handleFlag, handleFollowupAction, handleHabitTick, handleTriage } from './writes/queue.js'
 import { handleSyncAck } from './writes/syncack.js'
 
 const MAX_BODY_BYTES = 256 * 1024
@@ -158,9 +159,17 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
         decisions: project === null ? decisions : decisions.filter((d) => d.projectId === project),
       })
     }
-    case '/api/habits':
-      // EMPTY-VALID: no habit tracking exists anywhere on the VPS yet.
-      return respond(res, 200, { habits: [], generatedAt: toWarsawIso(now) })
+    case '/api/habits': {
+      // Overlay: pending tick dates union into completedDates immediately,
+      // so the streak the user just tapped never flickers away.
+      const queue = readQueueState(ctx.paths.lensQueueDir, ctx.log)
+      const habits = readHabits(ctx.paths.habitsPath, ctx.log).map((h) => {
+        const pending = queue.habitTicks.get(h.id)
+        if (pending === undefined) return h
+        return { ...h, completedDates: [...new Set([...h.completedDates, ...pending])].sort() }
+      })
+      return respond(res, 200, { habits, generatedAt: toWarsawIso(now) })
+    }
     case '/api/polish-words':
       // EMPTY-VALID: no flashcard source exists on the VPS yet.
       return respond(res, 200, { words: [] })
@@ -220,6 +229,11 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
   const followupAction = /^\/api\/followups\/([^/]+)\/action$/.exec(path)
   if (followupAction !== null) {
     const r = handleFollowupAction(deps, decodeURIComponent(followupAction[1] ?? ''), body)
+    return respond(res, r.status, r.body)
+  }
+  const habitTick = /^\/api\/habits\/([^/]+)\/tick$/.exec(path)
+  if (habitTick !== null) {
+    const r = handleHabitTick(deps, decodeURIComponent(habitTick[1] ?? ''), body)
     return respond(res, r.status, r.body)
   }
   return respond(res, 404, { error: 'not found' })

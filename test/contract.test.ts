@@ -9,6 +9,7 @@ import {
   DocumentsResponse,
   FlagResponse,
   FollowupActionResponse,
+  HabitTickResponse,
   HabitsResponse,
   InboxResponse,
   MemoryResponse,
@@ -136,6 +137,22 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(FollowupActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: fu?.id })
     console.log('  ✓ POST /api/followups/{id}/action — 401/401/200, schema-valid')
+  })
+
+  it('POST /api/habits/{id}/tick → HabitTickResponse, 401 without/wrong token', async () => {
+    const noToken = await env.post('/api/habits/hab-zaryadka/tick', { date: '2026-01-02' }, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post(
+      '/api/habits/hab-zaryadka/tick',
+      { date: '2026-01-02' },
+      'wrong-token-wrong-token-wrong',
+    )
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post('/api/habits/hab-zaryadka/tick', { date: '2026-01-02' })
+    expect(r.status).toBe(200)
+    expect(HabitTickResponse.parse(r.json)).toEqual({ status: 'ok', itemId: 'hab-zaryadka' })
+    console.log('  ✓ POST /api/habits/{id}/tick — 401/401/200, schema-valid')
   })
 
   it('POST /api/sync/ack → SyncAckResponse', async () => {
