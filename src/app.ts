@@ -32,6 +32,7 @@ import {
   handleUntriage,
 } from './writes/queue.js'
 import { handleSyncAck } from './writes/syncack.js'
+import { ChatService } from './chat/service.js'
 
 const MAX_BODY_BYTES = 256 * 1024
 
@@ -45,6 +46,7 @@ interface Ctx {
   paths: Paths
   writer: Writer
   statedb: StateDb
+  chat: ChatService
   log: Logger
   now: () => Date
 }
@@ -109,6 +111,11 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
     const brief = readBrief(ctx.paths.briefsDir, decodeURIComponent(briefId[1] ?? ''), ctx.log)
     if (brief === undefined) return respond(res, 404, { error: 'not found' })
     return respond(res, 200, brief)
+  }
+  const chatJobId = /^\/api\/chat\/([^/]+)$/.exec(path)
+  if (chatJobId !== null) {
+    const r = ctx.chat.status(decodeURIComponent(chatJobId[1] ?? ''))
+    return respond(res, r.status, r.body)
   }
   switch (path) {
     case '/api/status': {
@@ -236,6 +243,10 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
     const r = handleCapture(deps, body)
     return respond(res, r.status, r.body)
   }
+  if (path === '/api/chat') {
+    const r = ctx.chat.start(body)
+    return respond(res, r.status, r.body)
+  }
   if (path === '/api/sync/ack') {
     const r = handleSyncAck(deps, body)
     return respond(res, r.status, r.body)
@@ -279,13 +290,15 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
     dataDir: paths.dataDir,
   })
   writer.ensureDir(paths.dataDir)
+  const now = opts.nowFn ?? ((): Date => new Date())
   const ctx: Ctx = {
     cfg,
     paths,
     writer,
     statedb: new StateDb(paths.stateDbPath, log),
+    chat: new ChatService({ cfg, paths, writer, log, now }),
     log,
-    now: opts.nowFn ?? (() => new Date()),
+    now,
   }
 
   const server = createServer((req, res) => {
