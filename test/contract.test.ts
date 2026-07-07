@@ -5,6 +5,8 @@ import {
   BriefDetail,
   BriefsResponse,
   CaptureResponse,
+  ChatStartResponse,
+  ChatStatusResponse,
   DecisionsResponse,
   DocumentsResponse,
   FlagResponse,
@@ -209,6 +211,33 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(SyncAckResponse.parse(r.json)).toEqual({ status: 'ok' })
     console.log('  ✓ POST /api/sync/ack — 200, schema-valid')
+  })
+
+  let chatJobId = ''
+  it('POST /api/chat → ChatStartResponse (202), 401 without token', async () => {
+    const noToken = await env.post('/api/chat', { message: 'x', clientId: 'contract-chat-1' }, null)
+    expect(noToken.status).toBe(401)
+
+    const r = await env.post('/api/chat', { message: 'Что у меня сегодня?', clientId: 'contract-chat-1' })
+    expect(r.status).toBe(202)
+    chatJobId = ChatStartResponse.parse(r.json).jobId
+    console.log('  ✓ POST /api/chat — 202, schema-valid')
+  })
+
+  it('GET /api/chat/{jobId} → ChatStatusResponse, 401 without/wrong token', async () => {
+    expect(chatJobId).not.toBe('')
+    const noToken = await env.get(`/api/chat/${chatJobId}`, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.get(`/api/chat/${chatJobId}`, 'wrong-token-wrong-token-wrong')
+    expect(badToken.status).toBe(401)
+
+    const r = await env.get(`/api/chat/${chatJobId}`)
+    expect(r.status).toBe(200)
+    const parsed = ChatStatusResponse.safeParse(r.json)
+    if (!parsed.success) {
+      throw new Error(`/api/chat/{jobId} failed schema: ${JSON.stringify(parsed.error.issues, null, 2)}`)
+    }
+    console.log('  ✓ GET /api/chat/{jobId} — 401/401/200, schema-valid')
   })
 })
 
