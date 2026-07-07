@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { basename, dirname } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ChatStartResponse, ChatStatusResponse } from '../contract/schemas/index'
 import { buildEnv, type TestEnv } from './helpers/env'
@@ -210,6 +212,22 @@ describe('unconfigured chat → 503', () => {
     } finally {
       await off.close()
     }
+  })
+})
+
+describe('job buffer is the only new write, and lands in DATA_DIR', () => {
+  it('writes chat-jobs.ndjson under DATA_DIR and never persists the upstream key', async () => {
+    const start = ChatStartResponse.parse((await env.post('/api/chat', { message: 'на диск', clientId: 'disk-1' })).json)
+    await pollTerminal(env, start.jobId)
+
+    // the buffer is a direct child of the configured DATA_DIR
+    expect(dirname(env.paths.chatJobsPath)).toBe(env.cfg.dataDir)
+    expect(basename(env.paths.chatJobsPath)).toBe('chat-jobs.ndjson')
+    expect(existsSync(env.paths.chatJobsPath)).toBe(true)
+
+    const buffer = readFileSync(env.paths.chatJobsPath, 'utf8')
+    expect(buffer).toContain(start.jobId) // the turn is really persisted
+    expect(buffer).not.toContain(env.agent.key) // the key is used upstream only
   })
 })
 
