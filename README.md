@@ -59,6 +59,8 @@ or note contents), and keep serving.
 | POST | `/api/inbox/{id}/triage` | queue file `<ts>-triage-<id>.json`; idempotent | FULL (queue side) |
 | POST | `/api/memory/{id}/flag` | queue file `<ts>-flag-<id>.json`; `pendingFlag` served immediately, `mark-sensitive` masks sidecar-side at once | FULL |
 | POST | `/api/sync/ack` | overwrites `vault/system/last-sync.json` | FULL |
+| POST | `/api/chat` | starts an agent turn (job+poll); `clientId` replay returns the same `jobId`, one turn; **202** running (200 on replay) | FULL (needs `API_SERVER_KEY`) |
+| GET | `/api/chat/{jobId}` | polls a turn: `running` \| `done` (+`reply`,`tokensUsed`) \| `error`; unknown/expired → 404 | FULL |
 
 ¹ PARTIAL = correct and schema-valid today; richer fields/events arrive
 additively as the vault grows structure (people relations/agreements,
@@ -74,7 +76,39 @@ Polish words have no data source on the VPS at all yet.
 
 Errors are always `{ "error": "…" }` with a matching status code
 (401 unauthorized, 400 bad body, 404 unknown route, 405 wrong method,
-413 oversized body). Unknown query params are ignored.
+413 oversized body, 503 chat unconfigured). Unknown query params are ignored.
+
+## Chat proxy (`/api/chat`)
+
+The app never talks to the agent's model server; it only knows the sidecar and
+the `LENS_TOKEN`. The sidecar forwards a turn to the agent's OpenAI-compatible
+server on `127.0.0.1:8642`, hiding both the 30–120 s latency and the upstream
+`API_SERVER_KEY`.
+
+- **Job + poll.** `POST /api/chat {message, clientId, sessionId?}` returns
+  `{jobId, sessionId, status:"running"}` immediately (202; a `clientId` replay
+  returns the same job with 200 and never starts a second turn). The turn runs
+  in the background — a single `POST /v1/chat/completions` to `AGENT_API_URL`
+  with the upstream bearer, `CHAT_TURN_BUDGET_MS` budget — and the result lands
+  in the job buffer. `GET /api/chat/{jobId}` polls until `done` (with `reply`
+  and `tokensUsed` from `usage.total_tokens`) or `error`.
+- **Leak-free errors.** Upstream 5xx / timeout / unreadable body collapse to a
+  short human string (`agent error`, `agent timed out`, …); the upstream body
+  and the key are never forwarded. The key appears in no log line and no
+  response — pinned by tests, same bar as `LENS_TOKEN`.
+- **Job buffer.** Append-only `chat-jobs.ndjson` in `DATA_DIR` (the only new
+  write, through the same `Writer` allowlist; the fs invariant is unchanged).
+  Records expire after `CHAT_JOB_TTL_MS` (default 10 min), which bounds both
+  poll retention and dialog memory.
+- **Sessions (v1).** `sessionId` groups a dialog. Continuity is
+  **sidecar-maintained rolling context**: prior completed turns of the session
+  (up to `CHAT_HISTORY_MAX_TURNS`, within the TTL window) are replayed as the
+  `messages` array, so continuity holds regardless of how the agent server
+  keys sessions. The agent injects its own system prompt/memory/personality
+  (~17 k prompt tokens), so the sidecar carries only the dialog. **Caveat /
+  to confirm on the VPS:** whether the agent server has native session support
+  (e.g. `/api/sessions/:id`) that would give unbounded, server-side history is
+  not yet verified; if it does, a later version can switch to it additively.
 
 ## Development
 
@@ -116,6 +150,17 @@ cd hermes-lens-sidecar
 cp .env.example .env
 chmod 600 .env
 nano .env        # set LENS_TOKEN=<value from step 1>; defaults fit the VPS
+```
+
+For chat (`/api/chat`), also set **`API_SERVER_KEY`** in this same `.env` to
+the value already in the agent's `~/.hermes/.env`. The sidecar loads only its
+own `.env` — it must never read the agent's env file (that read-only boundary
+is pinned by `test/write-restriction.test.ts`), so the key is duplicated here
+by design. Leave it blank to ship without chat: `/api/chat` then returns 503
+and every other endpoint works normally. Confirm the value with:
+
+```bash
+grep API_SERVER_KEY ~/.hermes/.env    # copy the value into ~/hermes-lens-sidecar/.env
 ```
 
 Quick foreground sanity check (Ctrl-C to stop):
@@ -161,6 +206,11 @@ curl -s -H "Authorization: Bearer $TOKEN" "$HOST/api/status" | head -c 400; echo
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"text":"Тест из runbook","tags":["test"]}' "$HOST/api/capture"
 ls -t ~/vault/inbox/ | head -3   # the new note lands here (translit slug + -hhmm)
+
+# chat (only if API_SERVER_KEY is set) — start a turn, then poll the jobId
+JOB=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"message":"Скажи привет","clientId":"runbook-1"}' "$HOST/api/chat" | grep -oE '"jobId":"[^"]+"' | cut -d'"' -f4)
+sleep 5; curl -s -H "Authorization: Bearer $TOKEN" "$HOST/api/chat/$JOB"   # → status done + reply
 ```
 
 ## 6. Lens app settings
@@ -221,5 +271,7 @@ journalctl --user -u hermes-lens-sidecar --since today
 ```
 
 Sidecar-private state lives in `DATA_DIR` (default
-`~/hermes-lens-sidecar/data`): `captures.ndjson` (clientId dedup ledger) and
-`journal.ndjson` (write journal that feeds /api/timeline).
+`~/hermes-lens-sidecar/data`): `captures.ndjson` (clientId dedup ledger),
+`journal.ndjson` (write journal that feeds /api/timeline), and
+`chat-jobs.ndjson` (transit buffer for `/api/chat` turns; append-only,
+TTL-bounded, holds message + reply text so keep `chmod 700` on `DATA_DIR`).
