@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { createApp } from '../../src/app.js'
 import { makePaths, type Config, type Paths } from '../../src/config.js'
 import { toWarsawDate } from '../../src/lib/time.js'
+import { startFakeAgent, type FakeAgent } from './fake-agent'
 
 export const TEST_TOKEN = 'test-token-0123456789abcdef0123456789abcdef'
 
@@ -17,6 +18,15 @@ export interface SessionSpec {
   costUsd: number
 }
 
+export interface BuildEnvOpts {
+  /** Chat turn budget (ms). Default 5000; drop it low to exercise timeouts. */
+  chatBudgetMs?: number
+  /** Chat job-buffer TTL (ms). Default 600000. */
+  chatTtlMs?: number
+  /** Set false to boot with an empty API_SERVER_KEY (chat unconfigured → 503). */
+  chatConfigured?: boolean
+}
+
 export interface TestEnv {
   root: string
   baseUrl: string
@@ -24,6 +34,8 @@ export interface TestEnv {
   cfg: Config
   paths: Paths
   logs: string[]
+  /** The stand-in Hermes agent server the sidecar proxies chat turns to. */
+  agent: FakeAgent
   /** What buildStateDb inserted — lets tests recompute expected spend. */
   sessionSpecs: SessionSpec[]
   /** Dates of the date-relative brief fixtures (recent = in window, old = outside). */
@@ -84,7 +96,7 @@ function buildStateDb(dbPath: string): SessionSpec[] {
   ]
 }
 
-export async function buildEnv(): Promise<TestEnv> {
+export async function buildEnv(opts: BuildEnvOpts = {}): Promise<TestEnv> {
   const root = mkdtempSync(join(tmpdir(), 'lens-sidecar-'))
   const vaultDir = join(root, 'vault')
   const hermesDir = join(root, 'hermes')
@@ -151,6 +163,8 @@ export async function buildEnv(): Promise<TestEnv> {
   writeFileSync(join(backupsDir, `vault-${today}.tar.gz`), 'y'.repeat(2048), 'utf8')
   const sessionSpecs = buildStateDb(join(hermesDir, 'state.db'))
 
+  const agent = await startFakeAgent()
+
   const cfg: Config = {
     port: 0,
     bind: '127.0.0.1',
@@ -160,6 +174,12 @@ export async function buildEnv(): Promise<TestEnv> {
     backupsDir,
     dataDir,
     diskPath: root,
+    agentApiUrl: agent.url,
+    apiServerKey: opts.chatConfigured === false ? '' : agent.key,
+    chatModel: 'deepseek/deepseek-v4-pro',
+    chatTurnBudgetMs: opts.chatBudgetMs ?? 5_000,
+    chatJobTtlMs: opts.chatTtlMs ?? 600_000,
+    chatHistoryMaxTurns: 12,
   }
   const logs: string[] = []
   const { server } = createApp({ cfg, logSink: (line) => logs.push(line) })
@@ -191,10 +211,12 @@ export async function buildEnv(): Promise<TestEnv> {
     cfg,
     paths: makePaths(cfg),
     logs,
+    agent,
     sessionSpecs,
     briefDates,
     async close() {
       await new Promise<void>((resolve) => server.close(() => resolve()))
+      await agent.close()
       try {
         rmSync(root, { recursive: true, force: true })
       } catch {

@@ -10,6 +10,22 @@ export interface Config {
   backupsDir: string
   dataDir: string
   diskPath: string
+  /** Chat proxy: the agent's OpenAI-compatible server (loopback only). */
+  agentApiUrl: string
+  /**
+   * Upstream bearer for that server. The sidecar keeps its OWN copy (loaded
+   * from the sidecar's .env like every other secret) and never reads the
+   * agent's env file. Empty string = chat unconfigured → /api/chat answers 503
+   * while every other endpoint keeps working.
+   */
+  apiServerKey: string
+  chatModel: string
+  /** Hard budget for one agent turn before the sidecar gives up (ms). */
+  chatTurnBudgetMs: number
+  /** How long a finished/failed turn stays pollable AND how far dialog context reaches (ms). */
+  chatJobTtlMs: number
+  /** Max prior turns replayed as rolling context on a session. */
+  chatHistoryMaxTurns: number
 }
 
 /** Every path the sidecar touches, derived once from Config. */
@@ -38,6 +54,7 @@ export interface Paths {
   dataDir: string
   capturesLedgerPath: string
   journalPath: string
+  chatJobsPath: string
   diskPath: string
 }
 
@@ -69,6 +86,7 @@ export function makePaths(cfg: Config): Paths {
     dataDir: cfg.dataDir,
     capturesLedgerPath: join(cfg.dataDir, 'captures.ndjson'),
     journalPath: join(cfg.dataDir, 'journal.ndjson'),
+    chatJobsPath: join(cfg.dataDir, 'chat-jobs.ndjson'),
     diskPath: cfg.diskPath,
   }
 }
@@ -118,6 +136,13 @@ export function loadConfig(
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`invalid LENS_PORT: ${get('LENS_PORT') ?? ''}`)
   }
+  const posInt = (key: string, fallback: number): number => {
+    const raw = get(key)
+    if (raw === undefined || raw === '') return fallback
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n <= 0) throw new Error(`invalid ${key}: ${raw}`)
+    return n
+  }
   return {
     port,
     bind: get('LENS_BIND') ?? '127.0.0.1',
@@ -127,5 +152,13 @@ export function loadConfig(
     backupsDir: resolve(get('BACKUPS_DIR') ?? '/home/nick/backups'),
     dataDir: resolve(get('DATA_DIR') ?? join(process.cwd(), 'data')),
     diskPath: get('DISK_PATH') ?? '/',
+    // Chat proxy. API_SERVER_KEY is loaded here, from the sidecar's own config,
+    // exactly like LENS_TOKEN — never from the agent's secret file.
+    agentApiUrl: get('AGENT_API_URL') ?? 'http://127.0.0.1:8642',
+    apiServerKey: get('API_SERVER_KEY') ?? '',
+    chatModel: get('CHAT_MODEL') ?? 'deepseek/deepseek-v4-pro',
+    chatTurnBudgetMs: posInt('CHAT_TURN_BUDGET_MS', 180_000),
+    chatJobTtlMs: posInt('CHAT_JOB_TTL_MS', 600_000),
+    chatHistoryMaxTurns: posInt('CHAT_HISTORY_MAX_TURNS', 12),
   }
 }
