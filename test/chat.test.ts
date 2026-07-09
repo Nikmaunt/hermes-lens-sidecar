@@ -175,11 +175,15 @@ describe('session continuity', () => {
       const messages = (c.body as { messages?: { content?: string }[] }).messages
       return messages?.[messages.length - 1]?.content === 'Как меня зовут?'
     })
-    const messages = (t2Call?.body as { messages: { role: string; content: string }[] }).messages
-    expect(messages.length).toBe(3)
-    expect(messages[0]).toEqual({ role: 'user', content: 'Меня зовут Сэм' })
-    expect(messages[1]).toEqual({ role: 'assistant', content: 'Приятно познакомиться.' })
-    expect(messages[2]).toEqual({ role: 'user', content: 'Как меня зовут?' })
+    // The followups system block (chat-followups.test.ts) rides first;
+    // the rolling dialog itself must be exactly the prior exchange + the
+    // new question, in order.
+    const all = (t2Call?.body as { messages: { role: string; content: string }[] }).messages
+    const dialog = all.filter((m) => m.role !== 'system')
+    expect(dialog.length).toBe(3)
+    expect(dialog[0]).toEqual({ role: 'user', content: 'Меня зовут Сэм' })
+    expect(dialog[1]).toEqual({ role: 'assistant', content: 'Приятно познакомиться.' })
+    expect(dialog[2]).toEqual({ role: 'user', content: 'Как меня зовут?' })
   })
 })
 

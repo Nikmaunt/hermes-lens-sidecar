@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { toWarsawIso } from '../lib/time.js'
 import { appendJob, readJobState, type JobRecord, type JobState } from './store.js'
+import { followupsSystemContent } from './context.js'
 import type { Config, Paths } from '../config.js'
 import type { Logger } from '../lib/log.js'
 import type { Writer } from '../writes/fswrite.js'
@@ -24,7 +25,7 @@ export interface ChatResult {
 }
 
 interface ChatMessage {
-  role: 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant'
   content: string
 }
 
@@ -93,7 +94,17 @@ export class ChatService {
 
     const sessionId = req.sessionId ?? `sess-${randomUUID()}`
     const jobId = `job-${randomUUID()}`
-    const messages: ChatMessage[] = [...this.sessionHistory(state, sessionId), { role: 'user', content: message }]
+    // Active follow-ups ride along as a leading system message (fresh read
+    // every turn, fail-open) — see chat/context.ts. Never persisted in the
+    // job buffer: sessionHistory replays only the user/assistant dialog.
+    const followups = this.cfg.chatFollowupsContext
+      ? followupsSystemContent(this.paths.followupsPath, this.now(), this.log)
+      : undefined
+    const messages: ChatMessage[] = [
+      ...(followups === undefined ? [] : [{ role: 'system' as const, content: followups }]),
+      ...this.sessionHistory(state, sessionId),
+      { role: 'user', content: message },
+    ]
 
     appendJob(this.writer, this.paths.chatJobsPath, {
       jobId,
