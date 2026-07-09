@@ -6,7 +6,7 @@ import {
   BriefsResponse,
   CaptureResponse,
   ChatStartResponse,
-  ChatStatusResponse,
+  ChatJobResponse,
   DecisionsResponse,
   DocumentsResponse,
   FlagResponse,
@@ -224,7 +224,7 @@ describe('contract walk — POST endpoints', () => {
     console.log('  ✓ POST /api/chat — 202, schema-valid')
   })
 
-  it('GET /api/chat/{jobId} → ChatStatusResponse, 401 without/wrong token', async () => {
+  it('GET /api/chat/{jobId} → ChatJobResponse, 401 without/wrong token', async () => {
     expect(chatJobId).not.toBe('')
     const noToken = await env.get(`/api/chat/${chatJobId}`, null)
     expect(noToken.status).toBe(401)
@@ -233,7 +233,7 @@ describe('contract walk — POST endpoints', () => {
 
     const r = await env.get(`/api/chat/${chatJobId}`)
     expect(r.status).toBe(200)
-    const parsed = ChatStatusResponse.safeParse(r.json)
+    const parsed = ChatJobResponse.safeParse(r.json)
     if (!parsed.success) {
       throw new Error(`/api/chat/{jobId} failed schema: ${JSON.stringify(parsed.error.issues, null, 2)}`)
     }

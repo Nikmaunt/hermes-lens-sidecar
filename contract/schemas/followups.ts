@@ -2,18 +2,19 @@ import { z } from 'zod'
 import { Id, IsoDate } from './common'
 
 export const FollowupActionRequest = z.object({
-  action: z.enum(['done', 'snooze']),
+  /** "someday" parks the follow-up on the sidecar's someday list (sidecar-first). */
+  action: z.enum(['done', 'snooze', 'someday']),
   /** Required when action is "snooze": the new due date. */
   until: IsoDate.optional(),
 })
 export type FollowupActionRequest = z.infer<typeof FollowupActionRequest>
 
+/**
+ * Cancels a still-unprocessed pending done/snooze (the server deletes the
+ * queue file). Same endpoint as FollowupActionRequest; kept as a separate
+ * schema so the done/snooze enum stays untouched.
+ */
 export const FollowupUndoRequest = z.object({
-  /**
-   * Cancel a queued done/snooze while the agent has not processed it yet
-   * (its lens-queue file still exists). After processing, undo answers
-   * "gone" — the action is no longer pending and cannot be recalled.
-   */
   action: z.literal('undo'),
 })
 export type FollowupUndoRequest = z.infer<typeof FollowupUndoRequest>

@@ -1,9 +1,13 @@
 import { z } from 'zod'
 import { EventCategory, Id, IsoDate, IsoDateTime } from './common'
 
-/** A done/snooze request queued for the agent (not yet executed). */
+/**
+ * A done/snooze/someday request queued for the agent (not yet executed).
+ * "someday" is sidecar-first: the live /api/today overlay reports it before
+ * any Someday screen exists in the app, so the schema must tolerate it.
+ */
 export const FollowUpPendingAction = z.object({
-  action: z.enum(['done', 'snooze']),
+  action: z.enum(['done', 'snooze', 'someday']),
   until: IsoDate.optional(),
   requestedAt: IsoDateTime,
 })

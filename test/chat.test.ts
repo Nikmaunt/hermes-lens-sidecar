@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { ChatStartResponse, ChatStatusResponse } from '../contract/schemas/index'
+import { ChatStartResponse, ChatJobResponse } from '../contract/schemas/index'
 import { buildEnv, type TestEnv } from './helpers/env'
 import { cannedCompletion } from './helpers/fake-agent'
 
@@ -69,7 +69,7 @@ describe('POST /api/chat → GET lifecycle', () => {
 
     const { httpStatus, body } = await pollTerminal(env, accepted.jobId)
     expect(httpStatus).toBe(200)
-    const done = ChatStatusResponse.parse(body)
+    const done = ChatJobResponse.parse(body)
     expect(done.status).toBe('done')
     expect(done.jobId).toBe(accepted.jobId)
     expect(done.reply).toBe('Привет, Сэм!')
@@ -124,7 +124,7 @@ describe('upstream failures → status:error, leak-free', () => {
     env.agent.setHandler(() => ({ status: 500, bodyJson: { error: 'internal boom stacktrace' } }))
     const start = ChatStartResponse.parse((await env.post('/api/chat', { message: 'вызови сбой', clientId: 'err-1' })).json)
     const { body } = await pollTerminal(env, start.jobId)
-    const errored = ChatStatusResponse.parse(body)
+    const errored = ChatJobResponse.parse(body)
     expect(errored.status).toBe('error')
     expect(errored.error).toBeTruthy()
     expect(errored.reply).toBeUndefined()
@@ -137,7 +137,7 @@ describe('upstream failures → status:error, leak-free', () => {
     env.agent.setHandler(() => ({ status: 200, raw: 'not json at all' }))
     const start = ChatStartResponse.parse((await env.post('/api/chat', { message: 'мусор', clientId: 'err-2' })).json)
     const { body } = await pollTerminal(env, start.jobId)
-    expect(ChatStatusResponse.parse(body).status).toBe('error')
+    expect(ChatJobResponse.parse(body).status).toBe('error')
   })
 })
 
@@ -148,7 +148,7 @@ describe('budget timeout → status:error', () => {
       slow.agent.setHandler(() => ({ ...cannedCompletion(), delayMs: 4_000 }))
       const start = ChatStartResponse.parse((await slow.post('/api/chat', { message: 'засни', clientId: 'to-1' })).json)
       const { body } = await pollTerminal(slow, start.jobId, 8_000)
-      const errored = ChatStatusResponse.parse(body)
+      const errored = ChatJobResponse.parse(body)
       expect(errored.status).toBe('error')
       expect(errored.error).toMatch(/tim(e|ed) out|unavailable/i)
     } finally {

@@ -1,55 +1,59 @@
 import { z } from 'zod'
 import { Id, IsoDateTime } from './common'
 
-/**
- * Chat proxy (sidecar job+poll topology). The app POSTs a turn and polls for
- * the reply; the sidecar forwards it to the Hermes agent's OpenAI-compatible
- * server on loopback and hides both the latency and the upstream key.
+/*
+ * Chat with the Hermes agent (Release A).
  *
- * VERBATIM mirror of the future hermes-lens schema — the app repo stays the
- * source of truth. This release introduces the ChatStatus values on the
- * sidecar; the app schema carrying the SAME enum values must ship with or
- * before it (enum-first: a value the app cannot parse would break the client).
+ * DECISION / deliberate exception to the app's enum-first convention: the
+ * sidecar endpoint shipped to prod *before* this schema existed, so the source
+ * of truth for these shapes is the LIVE contract the server already serves
+ * (verified with curl), not this file. Everything below mirrors what the
+ * deployed sidecar actually sends and accepts — see schemas/chat.test.ts for
+ * the verbatim prod fixtures. Evolve additively only.
+ *
+ * Flow: POST /api/chat starts (or, by clientId, dedups) a turn and returns a
+ * running jobId; GET /api/chat/{jobId} is polled until status leaves "running".
+ * The agent thinks 30–120s and replies in one shot (no streaming); the job
+ * lives ~10 min server-side (TTL) before a poll 404s.
  */
 
-/** Lifecycle of a proxied chat turn. */
+/** The three states the sidecar reports for a chat turn. */
 export const ChatStatus = z.enum(['running', 'done', 'error'])
 export type ChatStatus = z.infer<typeof ChatStatus>
 
+/** POST /api/chat — start, or (by clientId) dedup, a turn. */
 export const ChatStartRequest = z.object({
   message: z.string().min(1),
-  /** Client-generated, stable across retries — dedups an offline replay. */
-  clientId: z.string().min(1),
   /**
-   * Continues an existing dialog; omit to start a fresh session. The server
-   * echoes the session id it used in ChatStartResponse.
+   * Client-generated id, stable across retries of the same turn. A replay with
+   * the same clientId returns the same jobId (server dedup) and does not start
+   * a second turn — the idempotency key for inline retry (D-A8).
    */
-  sessionId: z.string().min(1).optional(),
+  clientId: z.string().min(1),
+  /** Continues the rolling session; omitted on the very first turn (D-A7). */
+  sessionId: Id.optional(),
 })
 export type ChatStartRequest = z.infer<typeof ChatStartRequest>
 
-/**
- * The turn was accepted and is running in the background — poll
- * GET /api/chat/{jobId} for the outcome. `status` is always "running" here;
- * the real terminal state (done/error) is only ever read from the poll.
- */
+/** POST /api/chat response — the turn is accepted and running. */
 export const ChatStartResponse = z.object({
   jobId: Id,
   sessionId: Id,
-  status: z.literal('running'),
+  status: ChatStatus,
 })
 export type ChatStartResponse = z.infer<typeof ChatStartResponse>
 
-export const ChatStatusResponse = z.object({
+/** GET /api/chat/{jobId} response — one poll of a turn. */
+export const ChatJobResponse = z.object({
   jobId: Id,
   status: ChatStatus,
-  /** Present only when status is "done". */
+  /** The agent's full answer; present only once status is "done". */
   reply: z.string().optional(),
-  /** Human-readable, leak-free; present only when status is "error". */
+  /** Failure detail; present only once status is "error". */
   error: z.string().optional(),
-  /** Present once the turn reaches a terminal state (done or error). */
+  /** Finish time; present on the terminal (done/error) response. */
   finishedAt: IsoDateTime.optional(),
-  /** usage.total_tokens from the agent, for the future spend meter. */
+  /** Token spend for the turn (a small cost meter); present once the agent ran. */
   tokensUsed: z.int().optional(),
 })
-export type ChatStatusResponse = z.infer<typeof ChatStatusResponse>
+export type ChatJobResponse = z.infer<typeof ChatJobResponse>
