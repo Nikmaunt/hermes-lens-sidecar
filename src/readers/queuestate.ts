@@ -21,10 +21,16 @@ export interface PendingFollowupAction {
   requestedAt: string
 }
 
+export interface PendingSomedayAction {
+  action: 'activate' | 'close'
+  date?: string
+  requestedAt: string
+}
+
 /** One well-formed queue file, addressable for undo (delete-by-match). */
 export interface PendingQueueFile {
   path: string
-  type: 'triage' | 'followup' | 'habit-tick' | 'flag'
+  type: 'triage' | 'followup' | 'someday' | 'habit-tick' | 'flag'
   itemId: string
   /** habit-tick only: the date the pending tick is for. */
   date?: string
@@ -34,8 +40,10 @@ export interface QueueState {
   triagedItemIds: Set<string>
   /** itemId → latest pending flag. */
   flags: Map<string, PendingFlagEntry>
-  /** followup itemId → latest pending done/snooze request. */
+  /** followup itemId → latest pending done/snooze/someday request. */
   followupActions: Map<string, PendingFollowupAction>
+  /** someday itemId → latest pending activate/close request. */
+  somedayActions: Map<string, PendingSomedayAction>
   /** habitId → dates with a pending tick (unioned into completedDates). */
   habitTicks: Map<string, Set<string>>
   /** Every well-formed queue file — undo deletes matching entries. */
@@ -47,6 +55,7 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
     triagedItemIds: new Set(),
     flags: new Map(),
     followupActions: new Map(),
+    somedayActions: new Map(),
     habitTicks: new Map(),
     pendingFiles: [],
   }
@@ -72,6 +81,17 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
           requestedAt: typeof q.requestedAt === 'string' ? q.requestedAt : '1970-01-01T01:00:00+01:00',
         })
         state.pendingFiles.push({ path: f.path, type: 'followup', itemId: q.itemId })
+      } else if (
+        q.type === 'someday' &&
+        typeof q.itemId === 'string' &&
+        (q.action === 'activate' || q.action === 'close')
+      ) {
+        state.somedayActions.set(q.itemId, {
+          action: q.action,
+          ...(typeof q.date === 'string' ? { date: q.date } : {}),
+          requestedAt: typeof q.requestedAt === 'string' ? q.requestedAt : '1970-01-01T01:00:00+01:00',
+        })
+        state.pendingFiles.push({ path: f.path, type: 'someday', itemId: q.itemId })
       } else if (
         q.type === 'habit-tick' &&
         typeof q.habitId === 'string' &&

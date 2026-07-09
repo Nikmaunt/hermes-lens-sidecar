@@ -44,6 +44,9 @@ function stripCriticalityTail(title: string): string {
 
 const FOLLOWUP_LINE_RE = /^- \[ \] \[\[(\d{4}-\d{2}-\d{2})\]\]\s*[—-]\s*(.+)$/
 
+/** Trailing provenance marker the agent appends: `... (from [[NoteName]])`. */
+const FROM_SOURCE_RE = /\(from \[\[(.+?)\]\]\)\s*$/
+
 /**
  * Active followups.md lines keyed by their content-hash id (fu-<sha256/10>).
  * The verbatim line is what a followup-action queue file must carry — the
@@ -84,7 +87,7 @@ export function readFollowups(path: string, now: Date, log: Logger): FollowUpOut
     const dueDate = m[1] ?? ''
     let title = (m[2] ?? '').trim()
     let source = ''
-    const from = /\(from \[\[(.+?)\]\]\)\s*$/.exec(title)
+    const from = FROM_SOURCE_RE.exec(title)
     if (from !== null) {
       source = from[1] ?? ''
       title = title.slice(0, from.index).trim()
@@ -100,6 +103,89 @@ export function readFollowups(path: string, now: Date, log: Logger): FollowUpOut
     })
   }
   return out
+}
+
+/* -------------------------------- someday -------------------------------- */
+
+export interface SomedayPendingActionOut {
+  action: 'activate' | 'close'
+  /** Present when action is "activate": the due date the item returns with. */
+  date?: string
+  requestedAt: string
+}
+
+export interface SomedayItemOut {
+  id: string
+  title: string
+  /** Present only when the line carries a `(from [[NoteName]])` marker. */
+  source?: string
+  /** Set while an activate/close queue file awaits the agent (overlay). */
+  pendingAction?: SomedayPendingActionOut
+}
+
+/** vault/someday.md line, per SKILL.md: `- [ ] описание (from [[NoteName]])`. */
+const SOMEDAY_LINE_RE = /^- \[ \] (.+)$/
+
+/** A dated follow-up line — belongs in followups.md, not someday.md. */
+const DATED_PREFIX_RE = /^\[\[\d{4}-\d{2}-\d{2}\]\]\s*[—-]\s*/
+
+interface SomedayEntry extends SomedayItemOut {
+  /** The verbatim someday.md line the id was hashed from. */
+  line: string
+}
+
+/**
+ * Tolerant someday.md parser. Checked boxes are done and skipped silently; a
+ * `[[YYYY-MM-DD]] — ` line means the agent appended a dated follow-up to the
+ * wrong file — skipped with a warning so the misfire is visible in logs.
+ * Missing/unreadable file → empty list (fail-open; the sidecar NEVER creates
+ * someday.md — the agent's first parked item does).
+ */
+function parseSomeday(path: string, log: Logger): SomedayEntry[] {
+  const raw = readTextIfExists(path, log)
+  if (raw === undefined) return []
+  const out: SomedayEntry[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t.startsWith('- [')) continue
+    if (/^- \[[xX]\]/.test(t)) continue // done
+    const m = SOMEDAY_LINE_RE.exec(t)
+    if (m === null) {
+      log.warn('someday line skipped: unrecognized format')
+      continue
+    }
+    let title = (m[1] ?? '').trim()
+    if (DATED_PREFIX_RE.test(title)) {
+      log.warn('someday line skipped: dated follow-up line in someday.md')
+      continue
+    }
+    let source: string | undefined
+    const from = FROM_SOURCE_RE.exec(title)
+    if (from !== null) {
+      source = from[1] ?? ''
+      title = title.slice(0, from.index).trim()
+    }
+    out.push({
+      id: 'sd-' + shortHash(t, 10),
+      title,
+      ...(source !== undefined ? { source } : {}),
+      line: t,
+    })
+  }
+  return out
+}
+
+export function readSomeday(path: string, log: Logger): SomedayItemOut[] {
+  return parseSomeday(path, log).map(({ line: _line, ...item }) => item)
+}
+
+/**
+ * Active someday.md lines keyed by their content-hash id (sd-<sha256/10>).
+ * Like followups: the verbatim line is what a someday queue file must carry —
+ * the agent locates the target by line text, not by hash.
+ */
+export function readSomedayLines(path: string, log: Logger): Map<string, string> {
+  return new Map(parseSomeday(path, log).map((e) => [e.id, e.line]))
 }
 
 /* ----------------------------- subscriptions ----------------------------- */

@@ -10,7 +10,7 @@ import { readReminders } from './readers/reminders.js'
 import { readInbox } from './readers/inbox.js'
 import { readMemory } from './readers/memory.js'
 import { buildStatus, readCronJobs } from './readers/status.js'
-import { readFollowups, readPeople, readSubscriptions, inboxFileEvents } from './readers/vault.js'
+import { readFollowups, readPeople, readSomeday, readSubscriptions, inboxFileEvents } from './readers/vault.js'
 import { readBrief, readBriefs, todayMorningBrief } from './readers/briefs.js'
 import { readDecisions } from './readers/decisions.js'
 import { readHabits } from './readers/habits.js'
@@ -141,6 +141,16 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
         ...(brief !== undefined ? { brief } : {}),
       })
       return respond(res, 200, body)
+    }
+    case '/api/someday': {
+      // Same overlay pattern as /api/today: while an activate/close queue
+      // file awaits the agent, the item is served WITH pendingAction.
+      const queue = readQueueState(ctx.paths.lensQueueDir, ctx.log)
+      const items = readSomeday(ctx.paths.somedayPath, ctx.log).map((i) => {
+        const pending = queue.somedayActions.get(i.id)
+        return pending === undefined ? i : { ...i, pendingAction: pending }
+      })
+      return respond(res, 200, { items, generatedAt: toWarsawIso(now) })
     }
     case '/api/timeline': {
       const events = await timelineEvents(ctx)

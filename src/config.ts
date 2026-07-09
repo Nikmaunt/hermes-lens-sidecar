@@ -36,6 +36,7 @@ export interface Paths {
   peopleDir: string
   projectsDir: string
   followupsPath: string
+  somedayPath: string
   subscriptionsPath: string
   decisionsPath: string
   habitsPath: string
@@ -68,6 +69,7 @@ export function makePaths(cfg: Config): Paths {
     peopleDir: join(v, 'people'),
     projectsDir: join(v, 'projects'),
     followupsPath: join(v, 'followups.md'),
+    somedayPath: join(v, 'someday.md'),
     subscriptionsPath: join(v, 'subscriptions.md'),
     decisionsPath: join(v, 'decisions.md'),
     habitsPath: join(v, 'habits.md'),
