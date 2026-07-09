@@ -26,6 +26,8 @@ export interface Config {
   chatJobTtlMs: number
   /** Max prior turns replayed as rolling context on a session. */
   chatHistoryMaxTurns: number
+  /** Inject active followups.md items as a system message on every chat turn. */
+  chatFollowupsContext: boolean
 }
 
 /** Every path the sidecar touches, derived once from Config. */
@@ -143,6 +145,13 @@ export function loadConfig(
     if (!Number.isInteger(n) || n <= 0) throw new Error(`invalid ${key}: ${raw}`)
     return n
   }
+  const bool = (key: string, fallback: boolean): boolean => {
+    const raw = get(key)
+    if (raw === undefined || raw === '') return fallback
+    if (raw === 'true') return true
+    if (raw === 'false') return false
+    throw new Error(`invalid ${key}: ${raw}`)
+  }
   return {
     port,
     bind: get('LENS_BIND') ?? '127.0.0.1',
@@ -160,5 +169,6 @@ export function loadConfig(
     chatTurnBudgetMs: posInt('CHAT_TURN_BUDGET_MS', 180_000),
     chatJobTtlMs: posInt('CHAT_JOB_TTL_MS', 600_000),
     chatHistoryMaxTurns: posInt('CHAT_HISTORY_MAX_TURNS', 12),
+    chatFollowupsContext: bool('CHAT_FOLLOWUPS_CONTEXT', true),
   }
 }

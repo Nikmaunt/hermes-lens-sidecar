@@ -25,6 +25,8 @@ export interface BuildEnvOpts {
   chatTtlMs?: number
   /** Set false to boot with an empty API_SERVER_KEY (chat unconfigured → 503). */
   chatConfigured?: boolean
+  /** Set false to switch the followups system-context injection off. */
+  followupsContext?: boolean
 }
 
 export interface TestEnv {
@@ -180,6 +182,7 @@ export async function buildEnv(opts: BuildEnvOpts = {}): Promise<TestEnv> {
     chatTurnBudgetMs: opts.chatBudgetMs ?? 5_000,
     chatJobTtlMs: opts.chatTtlMs ?? 600_000,
     chatHistoryMaxTurns: 12,
+    chatFollowupsContext: opts.followupsContext ?? true,
   }
   const logs: string[] = []
   const { server } = createApp({ cfg, logSink: (line) => logs.push(line) })
