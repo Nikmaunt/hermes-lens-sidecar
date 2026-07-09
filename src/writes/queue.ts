@@ -109,7 +109,7 @@ export function handleFollowupAction(
   if (!ID_RE.test(itemId)) return { status: 400, body: { error: 'invalid item id' } }
   const req = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
   const action = req.action
-  if (action !== 'done' && action !== 'snooze' && action !== 'undo') {
+  if (action !== 'done' && action !== 'snooze' && action !== 'someday' && action !== 'undo') {
     return { status: 400, body: { error: 'invalid action' } }
   }
 

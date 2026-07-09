@@ -8,7 +8,7 @@ import type { Logger } from '../lib/log.js'
 /* ------------------------------- follow-ups ------------------------------ */
 
 export interface FollowUpPendingActionOut {
-  action: 'done' | 'snooze'
+  action: 'done' | 'snooze' | 'someday'
   until?: string
   requestedAt: string
 }

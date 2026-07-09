@@ -16,7 +16,7 @@ export interface PendingFlagEntry {
 }
 
 export interface PendingFollowupAction {
-  action: 'done' | 'snooze'
+  action: 'done' | 'snooze' | 'someday'
   until?: string
   requestedAt: string
 }
@@ -64,7 +64,7 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
       } else if (
         q.type === 'followup' &&
         typeof q.itemId === 'string' &&
-        (q.action === 'done' || q.action === 'snooze')
+        (q.action === 'done' || q.action === 'snooze' || q.action === 'someday')
       ) {
         state.followupActions.set(q.itemId, {
           action: q.action,
