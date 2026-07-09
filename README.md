@@ -100,6 +100,13 @@ server on `127.0.0.1:8642`, hiding both the 30–120 s latency and the upstream
   write, through the same `Writer` allowlist; the fs invariant is unchanged).
   Records expire after `CHAT_JOB_TTL_MS` (default 10 min), which bounds both
   poll retention and dialog memory.
+- **Followups context.** The agent's own turn context (SOUL/MEMORY/USER/
+  skills) does not include `followups.md`, and the chat channel has no file
+  tools — so the sidecar prepends the **active** follow-up lines (unchecked
+  `- [ ]` only, overdue marked) as a `system` message on every turn, read
+  fresh from the vault (read-only, `/api/today`'s parser). Missing/empty/
+  unreadable file fails open: the turn goes out without the block. Gate:
+  `CHAT_FOLLOWUPS_CONTEXT` (default `true`).
 - **Sessions (v1).** `sessionId` groups a dialog. Continuity is
   **sidecar-maintained rolling context**: prior completed turns of the session
   (up to `CHAT_HISTORY_MAX_TURNS`, within the TTL window) are replayed as the
