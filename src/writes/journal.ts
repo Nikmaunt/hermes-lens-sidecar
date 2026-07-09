@@ -15,6 +15,8 @@ const JOURNAL_TYPES = [
   'ack',
   'followup-action',
   'followup-undo',
+  'someday-action',
+  'someday-undo',
   'habit-tick',
 ] as const
 

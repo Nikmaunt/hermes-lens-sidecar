@@ -28,6 +28,7 @@ import {
   handleFlag,
   handleFollowupAction,
   handleHabitTick,
+  handleSomedayAction,
   handleTriage,
   handleUntriage,
 } from './writes/queue.js'
@@ -279,6 +280,11 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
   const followupAction = /^\/api\/followups\/([^/]+)\/action$/.exec(path)
   if (followupAction !== null) {
     const r = handleFollowupAction(deps, decodeURIComponent(followupAction[1] ?? ''), body)
+    return respond(res, r.status, r.body)
+  }
+  const somedayAction = /^\/api\/someday\/([^/]+)\/action$/.exec(path)
+  if (somedayAction !== null) {
+    const r = handleSomedayAction(deps, decodeURIComponent(somedayAction[1] ?? ''), body)
     return respond(res, r.status, r.body)
   }
   const habitTick = /^\/api\/habits\/([^/]+)\/tick$/.exec(path)

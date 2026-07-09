@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { toWarsawIso } from '../lib/time.js'
 import { readQueueState, type PendingQueueFile } from '../readers/queuestate.js'
-import { readFollowupLines } from '../readers/vault.js'
+import { readFollowupLines, readSomedayLines } from '../readers/vault.js'
 import { readHabits } from '../readers/habits.js'
 import type { Logger } from '../lib/log.js'
 import type { Paths } from '../config.js'
@@ -172,6 +172,78 @@ export function handleFollowupAction(
     relatedId: itemId,
   })
   log.info('followup action queued', { itemId, action })
+  return { status: 200, body: { status: 'ok', itemId } }
+}
+
+export function handleSomedayAction(
+  deps: { paths: Paths; writer: Writer; log: Logger; now: Date },
+  itemId: string,
+  body: unknown,
+): HandlerResult {
+  const { paths, writer, log, now } = deps
+  if (!ID_RE.test(itemId)) return { status: 400, body: { error: 'invalid item id' } }
+  const req = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+  const action = req.action
+  if (action !== 'activate' && action !== 'close' && action !== 'undo') {
+    return { status: 400, body: { error: 'invalid action' } }
+  }
+
+  if (action === 'undo') {
+    // Mirrors followup undo: delete the still-pending someday file(s); an
+    // action the agent already consumed has no file left → gone.
+    const removed = deletePendingFiles(deps, (f) => f.type === 'someday' && f.itemId === itemId)
+    if (!removed) return { status: 200, body: { status: 'gone', itemId } }
+    appendJournal(writer, paths.journalPath, {
+      type: 'someday-undo',
+      at: toWarsawIso(now),
+      title: 'Someday action undone',
+      detail: `${itemId} → undo`,
+      relatedId: itemId,
+    })
+    log.info('someday action undone', { itemId })
+    return { status: 200, body: { status: 'ok', itemId } }
+  }
+  let date: string | undefined
+  if (action === 'activate') {
+    if (typeof req.date !== 'string' || !isValidIsoDate(req.date)) {
+      return { status: 400, body: { error: 'activate requires a valid date (YYYY-MM-DD)' } }
+    }
+    date = req.date
+  }
+
+  // Same (itemId, action) already queued → idempotent replay, even if the
+  // agent has meanwhile consumed the someday.md line.
+  const queue = readQueueState(paths.lensQueueDir, log)
+  const pending = queue.somedayActions.get(itemId)
+  if (pending !== undefined && pending.action === action) {
+    return { status: 200, body: { status: 'ok', itemId } }
+  }
+
+  const line = readSomedayLines(paths.somedayPath, log).get(itemId)
+  if (line === undefined) {
+    // success-by-staleness for offline replays — see handleFollowupAction
+    return { status: 200, body: { status: 'gone', itemId } }
+  }
+
+  const requestedAt = toWarsawIso(now)
+  writeQueueFile(writer, paths.lensQueueDir, 'someday', itemId, {
+    type: 'someday',
+    itemId,
+    action,
+    ...(date !== undefined ? { date } : {}),
+    // The agent cannot recompute the content hash — it locates the target
+    // by this verbatim someday.md line.
+    line,
+    requestedAt,
+  })
+  appendJournal(writer, paths.journalPath, {
+    type: 'someday-action',
+    at: requestedAt,
+    title: 'Someday action queued',
+    detail: date !== undefined ? `${itemId} → ${action} ${date}` : `${itemId} → ${action}`,
+    relatedId: itemId,
+  })
+  log.info('someday action queued', { itemId, action })
   return { status: 200, body: { status: 'ok', itemId } }
 }
 
