@@ -20,6 +20,7 @@ import {
   ProjectsResponse,
   RemindersResponse,
   SearchResponse,
+  SomedayResponse,
   SyncAckResponse,
   TimelineResponse,
   TodaySummary,
@@ -39,6 +40,7 @@ import { toWarsawDate } from '../src/lib/time.js'
 const GET_ENDPOINTS: { path: string; schema: ZodType }[] = [
   { path: '/api/status', schema: AgentStatus },
   { path: '/api/today', schema: TodaySummary },
+  { path: '/api/someday', schema: SomedayResponse },
   { path: '/api/timeline', schema: TimelineResponse },
   { path: '/api/memory', schema: MemoryResponse },
   { path: '/api/projects', schema: ProjectsResponse },

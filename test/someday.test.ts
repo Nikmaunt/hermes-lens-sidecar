@@ -1,6 +1,13 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { FollowupActionResponse, TimelineResponse, TodaySummary } from '../contract/schemas/index'
+import {
+  FollowupActionResponse,
+  SomedayResponse,
+  TimelineResponse,
+  TodaySummary,
+} from '../contract/schemas/index'
+import { sha256Hex } from '../src/lib/hash.js'
 import { buildEnv, type TestEnv } from './helpers/env'
 
 /**
@@ -88,5 +95,75 @@ describe('followup action: someday (park without a date)', () => {
     expect(r.status).toBe(200)
     expect(FollowupActionResponse.parse(r.json)).toEqual({ status: 'gone', itemId: ghost })
     expect(env.listQueueFiles().filter((f) => f.includes(`-followup-${ghost}`))).toHaveLength(0)
+  })
+})
+
+/**
+ * GET /api/someday — the parked list from vault/someday.md, per the agent's
+ * SKILL.md line format `- [ ] описание (from [[NoteName]])`. The sidecar
+ * NEVER creates the file; the agent's first parked item does.
+ */
+
+const UKULELE = '- [ ] научиться играть на укулеле (from [[muzykalnye-idei]])'
+const LISBON = '- [ ] съездить в Лиссабон на выходные'
+
+function somedayPath(e: TestEnv): string {
+  return join(e.cfg.vaultDir, 'someday.md')
+}
+
+function writeSomedayFixture(e: TestEnv): void {
+  writeFileSync(
+    somedayPath(e),
+    [
+      '# Someday',
+      '',
+      UKULELE,
+      LISBON,
+      '- [x] прочитать «Дюну» (from [[knigi]])',
+      '- [ ] [[2026-07-01]] — датированная строка: агент промахнулся файлом (from [[oshibka]])',
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+}
+
+describe('GET /api/someday: parser and id form', () => {
+  it('serves active items with sd-<hash> ids; source only when (from [[...]]) is present', async () => {
+    writeSomedayFixture(env)
+    const r = await env.get('/api/someday')
+    expect(r.status).toBe(200)
+    const body = SomedayResponse.parse(r.json)
+    expect(typeof body.generatedAt).toBe('string')
+
+    expect(body.items).toHaveLength(2)
+    const [first, second] = body.items
+    expect(first).toEqual({
+      id: 'sd-' + sha256Hex(UKULELE).slice(0, 10),
+      title: 'научиться играть на укулеле',
+      source: 'muzykalnye-idei',
+    })
+    expect(second).toEqual({
+      id: 'sd-' + sha256Hex(LISBON).slice(0, 10),
+      title: 'съездить в Лиссабон на выходные',
+    })
+  })
+
+  it('a dated [[YYYY-MM-DD]] — line is skipped with a warning (misfiled follow-up)', async () => {
+    writeSomedayFixture(env)
+    const before = env.logs.length
+    const r = await env.get('/api/someday')
+    const body = SomedayResponse.parse(r.json)
+    expect(body.items.map((i) => i.title)).not.toContain(
+      expect.stringContaining('датированная строка'),
+    )
+    const fresh = env.logs.slice(before).join('\n')
+    expect(fresh).toMatch(/someday.*skipped/i)
+  })
+
+  it('missing file → empty list, 200 (fail-open, file is never created)', async () => {
+    rmSync(somedayPath(env), { force: true })
+    const r = await env.get('/api/someday')
+    expect(r.status).toBe(200)
+    expect(SomedayResponse.parse(r.json).items).toEqual([])
   })
 })
