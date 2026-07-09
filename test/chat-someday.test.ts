@@ -2,7 +2,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { loadConfig } from '../src/config'
-import { toWarsawDate } from '../src/lib/time'
 import { ChatStartResponse } from '../contract/schemas/index'
 import { buildEnv, type TestEnv } from './helpers/env'
 
@@ -16,10 +15,6 @@ import { buildEnv, type TestEnv } from './helpers/env'
 interface UpstreamMessage {
   role: string
   content: string
-}
-
-function warsawDatePlus(days: number): string {
-  return toWarsawDate(new Date(Date.now() + days * 86_400_000))
 }
 
 async function pollTerminal(env: TestEnv, jobId: string, timeoutMs = 10_000): Promise<{ status: string }> {

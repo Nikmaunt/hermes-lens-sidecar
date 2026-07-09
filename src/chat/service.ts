@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { toWarsawIso } from '../lib/time.js'
 import { appendJob, readJobState, type JobRecord, type JobState } from './store.js'
-import { followupsSystemContent } from './context.js'
+import { followupsSystemContent, somedaySystemContent } from './context.js'
 import type { Config, Paths } from '../config.js'
 import type { Logger } from '../lib/log.js'
 import type { Writer } from '../writes/fswrite.js'
@@ -94,14 +94,21 @@ export class ChatService {
 
     const sessionId = req.sessionId ?? `sess-${randomUUID()}`
     const jobId = `job-${randomUUID()}`
-    // Active follow-ups ride along as a leading system message (fresh read
-    // every turn, fail-open) — see chat/context.ts. Never persisted in the
-    // job buffer: sessionHistory replays only the user/assistant dialog.
-    const followups = this.cfg.chatFollowupsContext
-      ? followupsSystemContent(this.paths.followupsPath, this.now(), this.log)
-      : undefined
+    // Active follow-ups and parked someday items ride along as ONE leading
+    // system message (fresh read every turn, each section fail-open) — see
+    // chat/context.ts. Never persisted in the job buffer: sessionHistory
+    // replays only the user/assistant dialog.
+    const sections: string[] = []
+    if (this.cfg.chatFollowupsContext) {
+      const s = followupsSystemContent(this.paths.followupsPath, this.now(), this.log)
+      if (s !== undefined) sections.push(s)
+    }
+    if (this.cfg.chatSomedayContext) {
+      const s = somedaySystemContent(this.paths.somedayPath, this.log)
+      if (s !== undefined) sections.push(s)
+    }
     const messages: ChatMessage[] = [
-      ...(followups === undefined ? [] : [{ role: 'system' as const, content: followups }]),
+      ...(sections.length === 0 ? [] : [{ role: 'system' as const, content: sections.join('\n\n') }]),
       ...this.sessionHistory(state, sessionId),
       { role: 'user', content: message },
     ]

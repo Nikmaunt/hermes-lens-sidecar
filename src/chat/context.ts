@@ -1,4 +1,4 @@
-import { readFollowups } from '../readers/vault.js'
+import { readFollowups, readSomeday } from '../readers/vault.js'
 import type { Logger } from '../lib/log.js'
 
 /**
@@ -25,6 +25,25 @@ export function followupsSystemContent(path: string, now: Date, log: Logger): st
       return `- ${f.dueDate ?? 'без даты'} — ${f.title}${source}${overdue}`
     })
     return ['Активные follow-ups пользователя (из followups.md, YYYY-MM-DD — описание):', ...lines].join('\n')
+  } catch {
+    return undefined // a context block must never cost the user the turn
+  }
+}
+
+/**
+ * Second cheat-sheet section: the parked someday.md items, so the agent can
+ * answer «что у меня отложено?». Same rules as the followups section — read
+ * fresh every turn, any failure shape fails open to a turn without it.
+ */
+export function somedaySystemContent(path: string, log: Logger): string | undefined {
+  try {
+    const items = readSomeday(path, log)
+    if (items.length === 0) return undefined
+    const lines = items.map((i) => {
+      const source = i.source === undefined ? '' : ` (from [[${i.source}]])`
+      return `- ${i.title}${source}`
+    })
+    return ['Отложенные без срока (someday.md):', ...lines].join('\n')
   } catch {
     return undefined // a context block must never cost the user the turn
   }
