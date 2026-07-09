@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   FollowupActionResponse,
+  SomedayActionResponse,
   SomedayResponse,
   TimelineResponse,
   TodaySummary,
@@ -165,5 +166,174 @@ describe('GET /api/someday: parser and id form', () => {
     const r = await env.get('/api/someday')
     expect(r.status).toBe(200)
     expect(SomedayResponse.parse(r.json).items).toEqual([])
+  })
+})
+
+/**
+ * POST /api/someday/{id}/action — activate (back onto followups with a due
+ * date), close (retire for good), undo (recall a still-pending request).
+ * Gone/idempotency/undo semantics mirror the followup action endpoint.
+ */
+
+function somedayQueueFiles(id: string): string[] {
+  return env.listQueueFiles().filter((f) => f.includes(`-someday-${id}`))
+}
+
+async function somedayItems(): Promise<SomedayResponse['items']> {
+  return SomedayResponse.parse((await env.get('/api/someday')).json).items
+}
+
+describe('someday action: activate', () => {
+  let id = ''
+
+  it('queues {"type":"someday"} with the verbatim line and the date', async () => {
+    writeSomedayFixture(env)
+    id = 'sd-' + sha256Hex(UKULELE).slice(0, 10)
+
+    const r = await env.post(`/api/someday/${id}/action`, { action: 'activate', date: '2026-09-01' })
+    expect(r.status).toBe(200)
+    expect(SomedayActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: id })
+
+    const files = somedayQueueFiles(id)
+    expect(files).toHaveLength(1)
+    const queued = JSON.parse(
+      readFileSync(`${env.paths.lensQueueDir}/${files[0]}`, 'utf8'),
+    ) as Record<string, unknown>
+    expect(queued).toMatchObject({
+      type: 'someday',
+      itemId: id,
+      action: 'activate',
+      date: '2026-09-01',
+      line: UKULELE, // verbatim someday.md line — the agent matches by it
+    })
+    expect(typeof queued.requestedAt).toBe('string')
+  })
+
+  it('replay of the same (itemId, activate) → same success, still one file', async () => {
+    const r = await env.post(`/api/someday/${id}/action`, { action: 'activate', date: '2026-09-01' })
+    expect(r.status).toBe(200)
+    expect(r.json).toEqual({ status: 'ok', itemId: id })
+    expect(somedayQueueFiles(id)).toHaveLength(1)
+  })
+
+  it('GET /api/someday overlays pendingAction while the file exists', async () => {
+    const item = (await somedayItems()).find((i) => i.id === id)
+    expect(item?.pendingAction).toMatchObject({ action: 'activate', date: '2026-09-01' })
+    expect(typeof item?.pendingAction?.requestedAt).toBe('string')
+    // the untouched item carries no pendingAction
+    const other = (await somedayItems()).find((i) => i.id !== id)
+    expect(other?.pendingAction).toBeUndefined()
+  })
+
+  it('journal: the queued someday action lands in /api/timeline as a system event', async () => {
+    const t = TimelineResponse.parse((await env.get('/api/timeline')).json)
+    const ev = t.events.find((e) => e.title === 'Someday action queued' && e.relatedId === id)
+    expect(ev).toBeDefined()
+    expect(ev?.category).toBe('system')
+    expect(ev?.detail).toContain('activate')
+    expect(ev?.detail).toContain('2026-09-01')
+  })
+
+  it('undo recalls the pending activate: file deleted, overlay gone, replay → gone', async () => {
+    const undo = await env.post(`/api/someday/${id}/action`, { action: 'undo' })
+    expect(undo.status).toBe(200)
+    expect(SomedayActionResponse.parse(undo.json)).toEqual({ status: 'ok', itemId: id })
+    expect(somedayQueueFiles(id)).toHaveLength(0)
+    expect((await somedayItems()).find((i) => i.id === id)?.pendingAction).toBeUndefined()
+
+    const again = await env.post(`/api/someday/${id}/action`, { action: 'undo' })
+    expect(again.json).toEqual({ status: 'gone', itemId: id })
+
+    const t = TimelineResponse.parse((await env.get('/api/timeline')).json)
+    expect(t.events.find((e) => e.title === 'Someday action undone')?.relatedId).toBe(id)
+  })
+})
+
+describe('someday action: close', () => {
+  it('queues without a date and overlays pendingAction {action:"close"}', async () => {
+    writeSomedayFixture(env)
+    const id = 'sd-' + sha256Hex(LISBON).slice(0, 10)
+
+    const r = await env.post(`/api/someday/${id}/action`, { action: 'close' })
+    expect(r.status).toBe(200)
+    expect(SomedayActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: id })
+
+    const files = somedayQueueFiles(id)
+    expect(files).toHaveLength(1)
+    const queued = JSON.parse(
+      readFileSync(`${env.paths.lensQueueDir}/${files[0]}`, 'utf8'),
+    ) as Record<string, unknown>
+    expect(queued).toMatchObject({ type: 'someday', itemId: id, action: 'close', line: LISBON })
+    expect(queued.date).toBeUndefined()
+
+    const item = (await somedayItems()).find((i) => i.id === id)
+    expect(item?.pendingAction?.action).toBe('close')
+  })
+})
+
+describe('someday action: validation', () => {
+  it('activate with missing/malformed/impossible date → 400, no queue file', async () => {
+    writeSomedayFixture(env)
+    const id = 'sd-' + sha256Hex(UKULELE).slice(0, 10)
+    for (const body of [
+      { action: 'activate' },
+      { action: 'activate', date: 'tomorrow' },
+      { action: 'activate', date: '2026-13-01' },
+      { action: 'activate', date: '2026-02-30' },
+    ]) {
+      const r = await env.post(`/api/someday/${id}/action`, body)
+      expect(r.status, JSON.stringify(body)).toBe(400)
+    }
+    expect(somedayQueueFiles(id)).toHaveLength(0)
+  })
+
+  it('unknown action → 400; path-traversal id → 400', async () => {
+    const bad = await env.post(`/api/someday/sd-0123456789/action`, { action: 'yeet' })
+    expect(bad.status).toBe(400)
+    const evil = await env.post(`/api/someday/${encodeURIComponent('../../etc/passwd')}/action`, {
+      action: 'close',
+    })
+    expect(evil.status).toBe(400)
+  })
+})
+
+describe('someday action: gone semantics (offline replay, NOT 404)', () => {
+  it('id absent from someday.md → 200 {status:"gone"}, no queue file', async () => {
+    writeSomedayFixture(env)
+    const ghost = 'sd-feedc0ffee'
+    const r = await env.post(`/api/someday/${ghost}/action`, { action: 'close' })
+    expect(r.status).toBe(200)
+    expect(SomedayActionResponse.parse(r.json)).toEqual({ status: 'gone', itemId: ghost })
+    expect(somedayQueueFiles(ghost)).toHaveLength(0)
+  })
+
+  it('replay for an already-queued id keeps succeeding after the line vanished', async () => {
+    writeSomedayFixture(env)
+    const id = 'sd-' + sha256Hex(UKULELE).slice(0, 10)
+    await env.post(`/api/someday/${id}/action`, { action: 'close' })
+    // agent consumed the line but the queue file still exists → replay is ok
+    writeFileSync(somedayPath(env), `# Someday\n\n${LISBON}\n`, 'utf8')
+    const r = await env.post(`/api/someday/${id}/action`, { action: 'close' })
+    expect(r.status).toBe(200)
+    expect(r.json).toEqual({ status: 'ok', itemId: id })
+    await env.post(`/api/someday/${id}/action`, { action: 'undo' }) // cleanup
+  })
+
+  it('someday undo leaves pending followup files untouched', async () => {
+    writeSomedayFixture(env)
+    const fu = (await todayFollowUps())[2]
+    await env.post(`/api/followups/${fu?.id}/action`, { action: 'someday' })
+    const id = 'sd-' + sha256Hex(LISBON).slice(0, 10)
+    await env.post(`/api/someday/${id}/action`, { action: 'close' })
+    await env.post(`/api/someday/${id}/action`, { action: 'undo' })
+    expect(env.listQueueFiles().filter((f) => f.includes(`-followup-${fu?.id}`))).toHaveLength(1)
+    await env.post(`/api/followups/${fu?.id}/action`, { action: 'undo' }) // cleanup
+  })
+})
+
+describe('token hygiene on the someday paths', () => {
+  it('the bearer token never appears in any log line', () => {
+    expect(env.logs.length).toBeGreaterThan(0)
+    expect(env.logs.join('\n')).not.toContain(env.token)
   })
 })

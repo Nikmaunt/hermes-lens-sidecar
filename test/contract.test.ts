@@ -20,6 +20,7 @@ import {
   ProjectsResponse,
   RemindersResponse,
   SearchResponse,
+  SomedayActionResponse,
   SomedayResponse,
   SyncAckResponse,
   TimelineResponse,
@@ -203,6 +204,28 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(UntriageResponse.parse(r.json)).toEqual({ status: 'ok', itemId: capturedId })
     console.log('  ✓ POST /api/inbox/{id}/untriage — 401/401/200, schema-valid')
+  })
+
+  it('POST /api/someday/{id}/action → SomedayActionResponse, 401 without/wrong token', async () => {
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(env.paths.somedayPath, '# Someday\n\n- [ ] выучить жонглирование (from [[tsirk]])\n', 'utf8')
+    const someday = SomedayResponse.parse((await env.get('/api/someday')).json)
+    const item = someday.items[0]
+    expect(item).toBeDefined()
+
+    const noToken = await env.post(`/api/someday/${item?.id}/action`, { action: 'close' }, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post(
+      `/api/someday/${item?.id}/action`,
+      { action: 'close' },
+      'wrong-token-wrong-token-wrong',
+    )
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post(`/api/someday/${item?.id}/action`, { action: 'close' })
+    expect(r.status).toBe(200)
+    expect(SomedayActionResponse.parse(r.json)).toEqual({ status: 'ok', itemId: item?.id })
+    console.log('  ✓ POST /api/someday/{id}/action — 401/401/200, schema-valid')
   })
 
   it('POST /api/sync/ack → SyncAckResponse', async () => {
