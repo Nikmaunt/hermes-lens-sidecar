@@ -28,6 +28,8 @@ export interface Config {
   chatHistoryMaxTurns: number
   /** Inject active followups.md items as a system message on every chat turn. */
   chatFollowupsContext: boolean
+  /** Inject active someday.md items into that same system message. */
+  chatSomedayContext: boolean
 }
 
 /** Every path the sidecar touches, derived once from Config. */
@@ -172,5 +174,6 @@ export function loadConfig(
     chatJobTtlMs: posInt('CHAT_JOB_TTL_MS', 600_000),
     chatHistoryMaxTurns: posInt('CHAT_HISTORY_MAX_TURNS', 12),
     chatFollowupsContext: bool('CHAT_FOLLOWUPS_CONTEXT', true),
+    chatSomedayContext: bool('CHAT_SOMEDAY_CONTEXT', true),
   }
 }

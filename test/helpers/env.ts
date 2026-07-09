@@ -27,6 +27,8 @@ export interface BuildEnvOpts {
   chatConfigured?: boolean
   /** Set false to switch the followups system-context injection off. */
   followupsContext?: boolean
+  /** Set false to switch the someday system-context injection off. */
+  somedayContext?: boolean
 }
 
 export interface TestEnv {
@@ -183,6 +185,7 @@ export async function buildEnv(opts: BuildEnvOpts = {}): Promise<TestEnv> {
     chatJobTtlMs: opts.chatTtlMs ?? 600_000,
     chatHistoryMaxTurns: 12,
     chatFollowupsContext: opts.followupsContext ?? true,
+    chatSomedayContext: opts.somedayContext ?? true,
   }
   const logs: string[] = []
   const { server } = createApp({ cfg, logSink: (line) => logs.push(line) })
