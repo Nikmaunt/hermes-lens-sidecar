@@ -134,10 +134,12 @@ describe('followup undo (POST /api/followups/{id}/action {action:"undo"})', () =
 
   it('journal: followup-undo lands in /api/timeline as a system event', async () => {
     const t = TimelineResponse.parse((await env.get('/api/timeline')).json)
-    const ev = t.events.find((e) => e.title === 'Follow-up action undone')
+    // find by (title, relatedId): the suite performs several undos, and when
+    // two land in different seconds the newest-first sort makes plain
+    // find-by-title return the OTHER item's event (rare, timing-dependent).
+    const ev = t.events.find((e) => e.title === 'Follow-up action undone' && e.relatedId === id)
     expect(ev).toBeDefined()
     expect(ev?.category).toBe('system')
-    expect(ev?.relatedId).toBe(id)
   })
 
   it('unrelated queue files survive an undo', async () => {
