@@ -48,6 +48,7 @@ export interface Paths {
   remindersPath: string
   briefsDir: string
   lensQueueDir: string
+  notifInboxDir: string
   lastSyncPath: string
   gatewayStatePath: string
   heartbeatPath: string
@@ -58,6 +59,7 @@ export interface Paths {
   backupsDir: string
   dataDir: string
   capturesLedgerPath: string
+  notificationsLedgerPath: string
   journalPath: string
   chatJobsPath: string
   diskPath: string
@@ -81,6 +83,7 @@ export function makePaths(cfg: Config): Paths {
     remindersPath: join(v, 'system', 'reminders.json'),
     briefsDir: join(v, 'system', 'briefs'),
     lensQueueDir: join(v, 'system', 'lens-queue'),
+    notifInboxDir: join(v, 'system', 'notif-inbox'),
     lastSyncPath: join(v, 'system', 'last-sync.json'),
     gatewayStatePath: join(h, 'gateway_state.json'),
     heartbeatPath: join(h, 'cron', 'ticker_heartbeat'),
@@ -91,6 +94,7 @@ export function makePaths(cfg: Config): Paths {
     backupsDir: cfg.backupsDir,
     dataDir: cfg.dataDir,
     capturesLedgerPath: join(cfg.dataDir, 'captures.ndjson'),
+    notificationsLedgerPath: join(cfg.dataDir, 'notifications.ndjson'),
     journalPath: join(cfg.dataDir, 'journal.ndjson'),
     chatJobsPath: join(cfg.dataDir, 'chat-jobs.ndjson'),
     diskPath: cfg.diskPath,

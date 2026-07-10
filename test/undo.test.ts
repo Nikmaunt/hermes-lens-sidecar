@@ -42,12 +42,14 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
     const writer = new Writer({
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
+      notifInboxDir: env.paths.notifInboxDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })
     // inboxDir and dataDir are WRITE-allowed roots — deletion must still refuse
     for (const target of [
       join(env.paths.inboxDir, 'pozvonit-v-bank-0930.md'),
+      join(env.paths.notifInboxDir, '1783334100000-gm-0a1b2c3d.md'), // write-allowed, delete-refused
       join(env.paths.dataDir, 'journal.ndjson'),
       env.paths.lastSyncPath,
       env.paths.followupsPath,
@@ -61,6 +63,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
     const writer = new Writer({
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
+      notifInboxDir: env.paths.notifInboxDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })
@@ -77,6 +80,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
     const writer = new Writer({
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
+      notifInboxDir: env.paths.notifInboxDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })
