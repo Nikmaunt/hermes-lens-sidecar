@@ -3,7 +3,7 @@ import { makePaths, type Config, type Paths } from './config.js'
 import { isAuthorized } from './auth.js'
 import { createLogger, type Logger, type LogSink } from './lib/log.js'
 import { listFiles, readJsonTolerant } from './lib/fsread.js'
-import { toWarsawIso } from './lib/time.js'
+import { toWarsawIso, toWarsawMonth } from './lib/time.js'
 import { StateDb } from './readers/statedb.js'
 import { readQueueState } from './readers/queuestate.js'
 import { readReminders } from './readers/reminders.js'
@@ -16,7 +16,7 @@ import { readDecisions } from './readers/decisions.js'
 import { readHabits } from './readers/habits.js'
 import { readPolishWords } from './readers/polish.js'
 import { readDocs } from './readers/docs.js'
-import { readMonthSpend } from './readers/transactions.js'
+import { readMonthSpend, readMonthTransactions } from './readers/transactions.js'
 import type { DocumentItemOut } from './readers/vault.js'
 import { collectEvents, paginate } from './domain/timeline.js'
 import { buildToday } from './domain/today.js'
@@ -193,6 +193,22 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
         items,
         monthlyTotal,
         ...(spentThisMonth !== undefined ? { spentThisMonth } : {}),
+      })
+    }
+    case '/api/transactions': {
+      // No contract mirror yet (see src/contract-local/transactions.ts):
+      // additive endpoint, missing month file/dir → empty response, fail-open.
+      const monthParam = url.searchParams.get('month')
+      if (monthParam !== null && !/^\d{4}-\d{2}$/.test(monthParam)) {
+        return respond(res, 400, { error: 'invalid month' })
+      }
+      const month = monthParam ?? toWarsawMonth(now)
+      const data = readMonthTransactions(ctx.paths.financeDir, month, ctx.log)
+      return respond(res, 200, {
+        items: data?.items ?? [],
+        totals: data?.totals ?? [],
+        month,
+        generatedAt: toWarsawIso(now),
       })
     }
     case '/api/decisions': {
