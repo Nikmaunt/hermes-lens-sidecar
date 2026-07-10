@@ -55,21 +55,27 @@ function isJobRecord(v: unknown): v is JobRecord {
   )
 }
 
-/** Parse the buffer into the live, TTL-filtered view at instant `nowMs`. */
-export function readJobState(path: string, ttlMs: number, nowMs: number, log: Logger): JobState {
+/** Latest snapshot per jobId (+ raw line count, so compaction can no-op). */
+function parseBuffer(raw: string, log: Logger): { latest: Map<string, JobRecord>; lineCount: number } {
   const latest = new Map<string, JobRecord>()
-  const raw = readTextIfExists(path, log)
-  if (raw !== undefined) {
-    for (const line of raw.split('\n')) {
-      if (line.trim() === '') continue
-      try {
-        const parsed: unknown = JSON.parse(line)
-        if (isJobRecord(parsed)) latest.set(parsed.jobId, parsed) // last line wins
-      } catch {
-        log.warn('malformed chat job line skipped')
-      }
+  let lineCount = 0
+  for (const line of raw.split('\n')) {
+    if (line.trim() === '') continue
+    lineCount++
+    try {
+      const parsed: unknown = JSON.parse(line)
+      if (isJobRecord(parsed)) latest.set(parsed.jobId, parsed) // last line wins
+    } catch {
+      log.warn('malformed chat job line skipped')
     }
   }
+  return { latest, lineCount }
+}
+
+/** Parse the buffer into the live, TTL-filtered view at instant `nowMs`. */
+export function readJobState(path: string, ttlMs: number, nowMs: number, log: Logger): JobState {
+  const raw = readTextIfExists(path, log)
+  const latest = raw === undefined ? new Map<string, JobRecord>() : parseBuffer(raw, log).latest
   const byJobId = new Map<string, JobRecord>()
   const byClientId = new Map<string, JobRecord>()
   const cutoff = nowMs - ttlMs
@@ -87,4 +93,30 @@ export function readJobState(path: string, ttlMs: number, nowMs: number, log: Lo
 /** Append a full snapshot. The Writer is the only module allowed to write. */
 export function appendJob(writer: Writer, path: string, record: JobRecord): void {
   writer.appendLine(path, JSON.stringify(record))
+}
+
+/**
+ * Physically reclaim the buffer: rewrite it with only the LIVE latest
+ * snapshots (expired turns — plaintext replies included — plus superseded
+ * and malformed lines all vanish from disk, not just from the read view).
+ * Atomic tmp + rename, the same pattern last-sync.json uses, so a reader
+ * never sees a torn file. The whole pass is synchronous — nothing can
+ * interleave an append between the read and the rename. Runs on service
+ * start and per accepted turn; any failure is logged and swallowed, a
+ * compaction must never cost the user a turn.
+ */
+export function compactJobs(writer: Writer, path: string, ttlMs: number, nowMs: number, log: Logger): void {
+  try {
+    const raw = readTextIfExists(path, log)
+    if (raw === undefined) return
+    const { latest, lineCount } = parseBuffer(raw, log)
+    const cutoff = nowMs - ttlMs
+    const live = [...latest.values()]
+      .filter((r) => r.startedAtMs >= cutoff)
+      .sort((a, b) => a.startedAtMs - b.startedAtMs)
+    if (live.length === lineCount) return // every line already live and unique
+    writer.writeFileAtomic(path, live.map((r) => JSON.stringify(r)).join('\n') + (live.length > 0 ? '\n' : ''))
+  } catch {
+    log.warn('chat jobs compaction failed, buffer left as is')
+  }
 }

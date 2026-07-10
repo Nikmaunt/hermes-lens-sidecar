@@ -1,6 +1,11 @@
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ChatStartResponse } from '../contract/schemas/index'
+import { createLogger } from '../src/lib/log.js'
+import { compactJobs } from '../src/chat/store.js'
+import { Writer } from '../src/writes/fswrite.js'
 import { buildEnv, type TestEnv } from './helpers/env'
 
 /**
@@ -99,5 +104,57 @@ describe('chat-jobs.ndjson compaction', () => {
       if (count > 1) expect(jobId).toBe([...perJob.keys()].at(-1))
     }
     expect(perJob.get(firstJobId)).toBe(1)
+  })
+})
+
+describe('compactJobs unit (the startup path)', () => {
+  const setup = (): { path: string; writer: Writer; compact: (nowMs: number) => void } => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'lens-compact-'))
+    const path = join(dataDir, 'chat-jobs.ndjson')
+    const writer = new Writer({
+      inboxDir: join(dataDir, 'nope-inbox'),
+      lensQueueDir: join(dataDir, 'nope-queue'),
+      lastSyncPath: join(dataDir, 'nope-sync.json'),
+      dataDir,
+    })
+    const log = createLogger(() => {})
+    return { path, writer, compact: (nowMs) => compactJobs(writer, path, TTL, nowMs, log) }
+  }
+
+  const record = (jobId: string, startedAtMs: number, extra = ''): string =>
+    JSON.stringify({
+      jobId,
+      clientId: `c-${jobId}`,
+      sessionId: 's-1',
+      status: 'done',
+      startedAtMs,
+      message: 'm',
+      reply: `r${extra}`,
+    }) + '\n'
+
+  it('missing file → no-op; superseded snapshots collapse; result is idempotent', () => {
+    const { path, writer, compact } = setup()
+    const now = 1_800_000_000_000
+    compact(now) // no file yet — must not throw or create one
+    expect(() => readFileSync(path, 'utf8')).toThrow()
+
+    writer.appendLine(path, record('job-live', now - 1000, '-old-snapshot').trim())
+    writer.appendLine(path, record('job-live', now - 1000, '-final').trim())
+    writer.appendLine(path, record('job-dead', now - TTL - 1, '-expired').trim())
+    compact(now)
+    const once = readFileSync(path, 'utf8')
+    expect(once).toBe(record('job-live', now - 1000, '-final'))
+
+    compact(now) // second pass: already compact, byte-identical
+    expect(readFileSync(path, 'utf8')).toBe(once)
+  })
+
+  it('all records expired → the file is emptied, not deleted', () => {
+    const { path, writer, compact } = setup()
+    const now = 1_800_000_000_000
+    writer.appendLine(path, record('job-a', now - TTL - 1).trim())
+    expect(readFileSync(path, 'utf8')).not.toBe('')
+    compact(now)
+    expect(readFileSync(path, 'utf8')).toBe('')
   })
 })

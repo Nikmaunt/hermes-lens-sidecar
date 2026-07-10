@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { toWarsawIso } from '../lib/time.js'
-import { appendJob, readJobState, type JobRecord, type JobState } from './store.js'
+import { appendJob, compactJobs, readJobState, type JobRecord, type JobState } from './store.js'
 import { followupsSystemContent, somedaySystemContent } from './context.js'
 import type { Config, Paths } from '../config.js'
 import type { Logger } from '../lib/log.js'
@@ -53,6 +53,9 @@ export class ChatService {
     this.writer = deps.writer
     this.log = deps.log
     this.now = deps.now
+    // Startup compaction: a restarted sidecar sheds expired plaintext replies
+    // even before the first turn arrives.
+    compactJobs(this.writer, this.paths.chatJobsPath, this.cfg.chatJobTtlMs, this.now().getTime(), this.log)
   }
 
   /**
@@ -80,6 +83,9 @@ export class ChatService {
     const message = req.message
     const clientId = req.clientId
     const nowMs = this.now().getTime()
+    // Per-turn compaction keeps the buffer bounded for the life of the
+    // process; the state below is then read from the compacted file.
+    compactJobs(this.writer, this.paths.chatJobsPath, this.cfg.chatJobTtlMs, nowMs, this.log)
     const state = readJobState(this.paths.chatJobsPath, this.cfg.chatJobTtlMs, nowMs, this.log)
 
     // Idempotent replay: same clientId → the same job, no second turn. POST
