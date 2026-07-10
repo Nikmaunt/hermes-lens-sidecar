@@ -17,5 +17,8 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* contract-local schemas are test-only (zod): keep them out of dist so the
+     built server provably has zero runtime dependencies. */
+  "exclude": ["src/contract-local"]
 }
