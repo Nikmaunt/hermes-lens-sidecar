@@ -66,12 +66,19 @@ describe('active follow-ups reach the turn as a system message', () => {
     const messages = await turnMessages(env, 'Какие у меня дела?', 'fu-active-1')
     expect(messages[0]?.role).toBe('system')
     const block = messages[0]?.content ?? ''
+    // human label, no internal file names or vault mechanics anywhere
+    expect(block).toContain('Активные дела пользователя (с датами):')
+    for (const internal of ['followups.md', 'someday.md', 'vault']) {
+      expect(block).not.toContain(internal)
+    }
     expect(block).toContain('ответить Олегу про маршрут')
     expect(block).toContain('продлить проездной')
     expect(block).toContain('записаться к стоматологу')
     expect(block).toContain(warsawDatePlus(-1)) // dates come along
     expect(block).not.toContain('оплатить интернет') // [x] done
     expect(block).not.toContain('сломанная строка') // unparsable line
+    // the "call these just делами" instruction closes the block
+    expect(block.trimEnd().split('\n').at(-1)).toContain('называй это просто делами')
     expect(messages[messages.length - 1]).toEqual({ role: 'user', content: 'Какие у меня дела?' })
   })
 

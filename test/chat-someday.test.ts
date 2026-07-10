@@ -75,10 +75,19 @@ describe('someday items ride in the SAME system message as followups', () => {
     // followups section (fixture followups.md) is still there…
     expect(block).toContain('ответить Олегу про маршрут')
     // …and the someday section follows in the same block
-    expect(block).toContain('Отложенные без срока (someday.md):')
+    expect(block).toContain('Отложенные дела без срока:')
     expect(block).toContain('научиться играть на укулеле')
     expect(block).toContain('съездить в Лиссабон на выходные')
     expect(block).not.toContain('прочитать «Дюну»') // [x] done
+    // human labels only: no internal file names or vault mechanics
+    for (const internal of ['followups.md', 'someday.md', 'vault']) {
+      expect(block).not.toContain(internal)
+    }
+    // the instruction line closes the block and appears exactly once
+    expect(block.trimEnd().split('\n').at(-1)).toBe(
+      'Отвечая пользователю, называй это просто делами/отложенными делами, не упоминай файлы и внутреннюю механику.',
+    )
+    expect(block.match(/называй это просто делами/g)).toHaveLength(1)
   })
 
   it('no active followups → the system message still carries the someday section', async () => {
@@ -87,8 +96,8 @@ describe('someday items ride in the SAME system message as followups', () => {
     const messages = await turnMessages(env, 'Дела без followups', 'sd-only-1')
     const system = messages.filter((m) => m.role === 'system')
     expect(system).toHaveLength(1)
-    expect(system[0]?.content).toContain('Отложенные без срока (someday.md):')
-    expect(system[0]?.content).not.toContain('follow-ups')
+    expect(system[0]?.content).toContain('Отложенные дела без срока:')
+    expect(system[0]?.content).not.toContain('Активные дела')
   })
 
   it('fresh read each turn: a new someday line appears on the very next turn', async () => {
@@ -112,7 +121,7 @@ describe('fail-open: no someday section, the turn goes out anyway', () => {
     const messages = await turnMessages(env, 'Дела без someday-файла', 'sd-missing-1')
     const system = messages.filter((m) => m.role === 'system')
     expect(system).toHaveLength(1) // fixture followups.md is active
-    expect(system[0]?.content).not.toContain('Отложенные без срока')
+    expect(system[0]?.content).not.toContain('Отложенные дела без срока')
   })
 
   it('unreadable someday.md (a directory) → turn still done, no someday section', async () => {
@@ -120,7 +129,7 @@ describe('fail-open: no someday section, the turn goes out anyway', () => {
     mkdirSync(join(env.cfg.vaultDir, 'someday.md'))
     const messages = await turnMessages(env, 'Дела при битом someday', 'sd-broken-1')
     expect(messages.filter((m) => m.role === 'system')[0]?.content ?? '').not.toContain(
-      'Отложенные без срока',
+      'Отложенные дела без срока',
     )
   })
 
@@ -141,7 +150,7 @@ describe('CHAT_SOMEDAY_CONTEXT=false switches only the someday section off', () 
       const system = messages.filter((m) => m.role === 'system')
       expect(system).toHaveLength(1)
       expect(system[0]?.content).toContain('ответить Олегу про маршрут')
-      expect(system[0]?.content).not.toContain('Отложенные без срока')
+      expect(system[0]?.content).not.toContain('Отложенные дела без срока')
     } finally {
       await off.close()
     }
