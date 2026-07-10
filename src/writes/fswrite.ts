@@ -10,14 +10,16 @@ import { dirname, resolve, sep } from 'node:path'
  *   1. NEW capture notes in vault/inbox/ (plus their transient .lock)
  *   2. queue files in vault/system/lens-queue/
  *   3. overwriting vault/system/last-sync.json
- *   4. its own private data dir (ledger, journal)
+ *   4. its own private data dir (ledgers, journal)
+ *   5. NEW notification records in vault/system/notif-inbox/
  * Everything else — state.db, ~/.hermes/*, existing vault notes — is
  * strictly read-only, and Writer refuses paths outside the allowlist.
  *
  * DELETION is narrower still: the ONLY root where files may be removed is
  * vault/system/lens-queue/ — undo of a still-pending request deletes its
- * queue file (which this sidecar itself created). Notes, ledger, journal
- * and last-sync.json can never be deleted through Writer.
+ * queue file (which this sidecar itself created). Notes, ledgers, journal,
+ * last-sync.json and notif-inbox records can never be deleted through
+ * Writer (notif-inbox is append-only input; the AGENT consumes it).
  */
 export class Writer {
   private readonly allowedDirs: string[]
@@ -27,10 +29,16 @@ export class Writer {
   constructor(opts: {
     inboxDir: string
     lensQueueDir: string
+    notifInboxDir: string
     lastSyncPath: string
     dataDir: string
   }) {
-    this.allowedDirs = [resolve(opts.inboxDir), resolve(opts.lensQueueDir), resolve(opts.dataDir)]
+    this.allowedDirs = [
+      resolve(opts.inboxDir),
+      resolve(opts.lensQueueDir),
+      resolve(opts.notifInboxDir),
+      resolve(opts.dataDir),
+    ]
     this.allowedFiles = new Set([
       resolve(opts.lastSyncPath),
       resolve(opts.lastSyncPath + '.tmp'),

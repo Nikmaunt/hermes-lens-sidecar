@@ -18,6 +18,7 @@ const JOURNAL_TYPES = [
   'someday-action',
   'someday-undo',
   'habit-tick',
+  'notification',
 ] as const
 
 export interface JournalEntry {

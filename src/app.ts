@@ -24,6 +24,7 @@ import { runSearch } from './domain/search.js'
 import { Writer } from './writes/fswrite.js'
 import { readJournal } from './writes/journal.js'
 import { handleCapture } from './writes/capture.js'
+import { handleNotification, NotificationRateLimiter } from './writes/notifications.js'
 import {
   handleFlag,
   handleFollowupAction,
@@ -48,6 +49,7 @@ interface Ctx {
   writer: Writer
   statedb: StateDb
   chat: ChatService
+  notifLimiter: NotificationRateLimiter
   log: Logger
   now: () => Date
 }
@@ -270,6 +272,10 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
     const r = handleCapture(deps, body)
     return respond(res, r.status, r.body)
   }
+  if (path === '/api/notifications') {
+    const r = handleNotification(deps, ctx.notifLimiter, body)
+    return respond(res, r.status, r.body)
+  }
   if (path === '/api/chat') {
     const r = ctx.chat.start(body)
     return respond(res, r.status, r.body)
@@ -318,6 +324,7 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
   const writer = new Writer({
     inboxDir: paths.inboxDir,
     lensQueueDir: paths.lensQueueDir,
+    notifInboxDir: paths.notifInboxDir,
     lastSyncPath: paths.lastSyncPath,
     dataDir: paths.dataDir,
   })
@@ -329,6 +336,7 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
     writer,
     statedb: new StateDb(paths.stateDbPath, log),
     chat: new ChatService({ cfg, paths, writer, log, now }),
+    notifLimiter: new NotificationRateLimiter(),
     log,
     now,
   }

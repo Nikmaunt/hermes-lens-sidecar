@@ -114,6 +114,7 @@ describe('compactJobs unit (the startup path)', () => {
     const writer = new Writer({
       inboxDir: join(dataDir, 'nope-inbox'),
       lensQueueDir: join(dataDir, 'nope-queue'),
+      notifInboxDir: join(dataDir, 'nope-notif'),
       lastSyncPath: join(dataDir, 'nope-sync.json'),
       dataDir,
     })
