@@ -15,6 +15,7 @@ import {
   HabitsResponse,
   InboxResponse,
   MemoryResponse,
+  NotificationCaptureResponse,
   PeopleResponse,
   PolishWordsResponse,
   ProjectsResponse,
@@ -236,6 +237,30 @@ describe('contract walk — POST endpoints', () => {
     expect(r.status).toBe(200)
     expect(SyncAckResponse.parse(r.json)).toEqual({ status: 'ok' })
     console.log('  ✓ POST /api/sync/ack — 200, schema-valid')
+  })
+
+  it('POST /api/notifications → NotificationCaptureResponse, 401 without/wrong token', async () => {
+    const body = {
+      clientId: 'contract-notif-1',
+      package: 'com.example.app',
+      postedAt: '2026-07-11T08:00:00+02:00',
+      capturedAt: '2026-07-11T08:00:01+02:00',
+      title: 'Contract walk',
+      text: 'notification body',
+    }
+    const noToken = await env.post('/api/notifications', body, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post('/api/notifications', body, 'wrong-token-wrong-token-wrong')
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post('/api/notifications', body)
+    expect(r.status).toBe(201)
+    expect(NotificationCaptureResponse.parse(r.json).status).toBe('ok')
+
+    const replay = await env.post('/api/notifications', body)
+    expect(replay.status).toBe(200)
+    expect(NotificationCaptureResponse.parse(replay.json).status).toBe('duplicate')
+    console.log('  ✓ POST /api/notifications — 401/401/201+duplicate, schema-valid')
   })
 
   let chatJobId = ''
