@@ -38,15 +38,25 @@ function guessCategory(fact: string): MemoryCategoryOut {
   return 'misc'
 }
 
+const TOPIC_MAX = 40
+
+/**
+ * Human title for a fact: the whole first sentence when it fits TOPIC_MAX,
+ * otherwise a word-boundary cut with an ellipsis — never a dangling
+ * fragment («ИДЕЯ ДЛЯ HERMES LENS: НА»).
+ */
 function topicOf(fact: string): string {
-  const words = fact.replace(/\s+/g, ' ').trim().split(' ')
+  const text = fact.replace(/\s+/g, ' ').trim()
+  // sentence end = terminator before whitespace/EOL, so «40.5 USD» stays whole
+  const end = /[.!?](?=\s|$)/.exec(text)
+  const sentence = (end === null ? text : text.slice(0, end.index)).replace(/[.,;:!?]+$/, '').trim()
+  if (sentence.length <= TOPIC_MAX) return sentence
   let topic = ''
-  for (const w of words) {
-    if (topic !== '' && (topic + ' ' + w).length > 40) break
+  for (const w of sentence.split(' ')) {
+    if (topic !== '' && (topic + ' ' + w).length > TOPIC_MAX) break
     topic = topic === '' ? w : topic + ' ' + w
-    if (topic.split(' ').length >= 5) break
   }
-  return topic.replace(/[.,;:!?]+$/, '')
+  return topic.replace(/[.,;:!?]+$/, '') + '…'
 }
 
 interface RawFact {
