@@ -24,11 +24,21 @@ export function followupsSystemContent(path: string, now: Date, log: Logger): st
       const overdue = f.urgency === 'overdue' ? ' (просрочено)' : ''
       return `- ${f.dueDate ?? 'без даты'} — ${f.title}${source}${overdue}`
     })
-    return ['Активные follow-ups пользователя (из followups.md, YYYY-MM-DD — описание):', ...lines].join('\n')
+    // Human label only — the agent mirrors these headings back to the user,
+    // so internal file names and vault mechanics must never appear here.
+    return ['Активные дела пользователя (с датами):', ...lines].join('\n')
   } catch {
     return undefined // a context block must never cost the user the turn
   }
 }
+
+/**
+ * Closes the cheat-sheet system block (appended once, after all sections):
+ * without it the agent mirrors the block's internals — labels, file names,
+ * source slugs — back into user-facing replies (UX finding).
+ */
+export const CONTEXT_INSTRUCTION =
+  'Отвечая пользователю, называй это просто делами/отложенными делами, не упоминай файлы и внутреннюю механику.'
 
 /**
  * Second cheat-sheet section: the parked someday.md items, so the agent can
@@ -43,7 +53,7 @@ export function somedaySystemContent(path: string, log: Logger): string | undefi
       const source = i.source === undefined ? '' : ` (from [[${i.source}]])`
       return `- ${i.title}${source}`
     })
-    return ['Отложенные без срока (someday.md):', ...lines].join('\n')
+    return ['Отложенные дела без срока:', ...lines].join('\n')
   } catch {
     return undefined // a context block must never cost the user the turn
   }

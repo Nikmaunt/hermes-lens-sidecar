@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { toWarsawIso } from '../lib/time.js'
 import { appendJob, compactJobs, readJobState, type JobRecord, type JobState } from './store.js'
-import { followupsSystemContent, somedaySystemContent } from './context.js'
+import { CONTEXT_INSTRUCTION, followupsSystemContent, somedaySystemContent } from './context.js'
 import type { Config, Paths } from '../config.js'
 import type { Logger } from '../lib/log.js'
 import type { Writer } from '../writes/fswrite.js'
@@ -113,6 +113,9 @@ export class ChatService {
       const s = somedaySystemContent(this.paths.somedayPath, this.log)
       if (s !== undefined) sections.push(s)
     }
+    // One closing instruction for the whole block, regardless of how many
+    // sections made it in — see CONTEXT_INSTRUCTION.
+    if (sections.length > 0) sections.push(CONTEXT_INSTRUCTION)
     const messages: ChatMessage[] = [
       ...(sections.length === 0 ? [] : [{ role: 'system' as const, content: sections.join('\n\n') }]),
       ...this.sessionHistory(state, sessionId),
