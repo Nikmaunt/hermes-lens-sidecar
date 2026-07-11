@@ -44,7 +44,7 @@ function deletePendingFiles(
   return removed
 }
 
-function writeQueueFile(writer: Writer, dir: string, kind: string, itemId: string, payload: object): void {
+export function writeQueueFile(writer: Writer, dir: string, kind: string, itemId: string, payload: object): void {
   for (let bump = 0; bump < 5; bump++) {
     const name = `${Date.now() + bump}-${kind}-${itemId}.json`
     try {

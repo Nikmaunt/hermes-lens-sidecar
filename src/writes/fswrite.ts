@@ -12,6 +12,9 @@ import { dirname, resolve, sep } from 'node:path'
  *   3. overwriting vault/system/last-sync.json
  *   4. its own private data dir (ledgers, journal)
  *   5. NEW notification records in vault/system/notif-inbox/
+ *   6. the vault/system/command-results/ DIRECTORY itself, created at boot
+ *      so the VPS runner has a guaranteed drop location — the sidecar only
+ *      READS result files there, it never creates or modifies them
  * Everything else — state.db, ~/.hermes/*, existing vault notes — is
  * strictly read-only, and Writer refuses paths outside the allowlist.
  *
@@ -30,6 +33,7 @@ export class Writer {
     inboxDir: string
     lensQueueDir: string
     notifInboxDir: string
+    commandResultsDir: string
     lastSyncPath: string
     dataDir: string
   }) {
@@ -37,6 +41,7 @@ export class Writer {
       resolve(opts.inboxDir),
       resolve(opts.lensQueueDir),
       resolve(opts.notifInboxDir),
+      resolve(opts.commandResultsDir),
       resolve(opts.dataDir),
     ]
     this.allowedFiles = new Set([

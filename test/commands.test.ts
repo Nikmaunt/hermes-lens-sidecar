@@ -56,8 +56,8 @@ interface StatusItem {
   type: string
   requestedAt: string
   state: string
-  summary?: string
-  result?: { kind: string; id: string }
+  summary?: string | undefined
+  result?: { kind: string; id: string } | undefined
 }
 
 async function getStatuses(env: TestEnv, query = ''): Promise<StatusItem[]> {

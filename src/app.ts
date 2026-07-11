@@ -25,6 +25,7 @@ import { Writer } from './writes/fswrite.js'
 import { readJournal } from './writes/journal.js'
 import { handleCapture } from './writes/capture.js'
 import { handleNotification, NotificationRateLimiter } from './writes/notifications.js'
+import { handleCommand, listCommands, CommandRateLimiter } from './writes/commands.js'
 import {
   handleFlag,
   handleFollowupAction,
@@ -50,6 +51,7 @@ interface Ctx {
   statedb: StateDb
   chat: ChatService
   notifLimiter: NotificationRateLimiter
+  commandLimiter: CommandRateLimiter
   log: Logger
   now: () => Date
 }
@@ -235,6 +237,10 @@ async function handleGet(ctx: Ctx, path: string, url: URL, res: ServerResponse):
       return respond(res, 200, { words: readPolishWords(ctx.paths.polishWordsPath, ctx.log) })
     case '/api/briefs':
       return respond(res, 200, { items: readBriefs(ctx.paths.briefsDir, now, ctx.log) })
+    case '/api/commands': {
+      const r = listCommands({ paths: ctx.paths, log: ctx.log, now }, url.searchParams.get('limit'))
+      return respond(res, r.status, r.body)
+    }
     case '/api/inbox':
       return respond(res, 200, { items: await currentInbox(ctx) })
     case '/api/reminders':
@@ -274,6 +280,10 @@ async function handlePost(ctx: Ctx, path: string, raw: string | null, res: Serve
   }
   if (path === '/api/notifications') {
     const r = handleNotification(deps, ctx.notifLimiter, body)
+    return respond(res, r.status, r.body)
+  }
+  if (path === '/api/commands') {
+    const r = handleCommand(deps, ctx.commandLimiter, body)
     return respond(res, r.status, r.body)
   }
   if (path === '/api/chat') {
@@ -325,10 +335,14 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
     inboxDir: paths.inboxDir,
     lensQueueDir: paths.lensQueueDir,
     notifInboxDir: paths.notifInboxDir,
+    commandResultsDir: paths.commandResultsDir,
     lastSyncPath: paths.lastSyncPath,
     dataDir: paths.dataDir,
   })
   writer.ensureDir(paths.dataDir)
+  // Created at boot so the VPS runner always has a drop location; the
+  // sidecar itself only READS result files from it (see fswrite.ts header).
+  writer.ensureDir(paths.commandResultsDir)
   const now = opts.nowFn ?? ((): Date => new Date())
   const ctx: Ctx = {
     cfg,
@@ -337,6 +351,7 @@ export function createApp(opts: { cfg: Config; logSink?: LogSink; nowFn?: () => 
     statedb: new StateDb(paths.stateDbPath, log),
     chat: new ChatService({ cfg, paths, writer, log, now }),
     notifLimiter: new NotificationRateLimiter(),
+    commandLimiter: new CommandRateLimiter(),
     log,
     now,
   }

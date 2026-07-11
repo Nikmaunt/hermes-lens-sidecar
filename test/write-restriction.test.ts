@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * Grep-provable write surface: the ONLY module in src/ that calls fs write
- * APIs is writes/fswrite.ts (whose Writer refuses paths outside the five
+ * APIs is writes/fswrite.ts (whose Writer refuses paths outside the six
  * allowed roots — notif-inbox joined the allowlist with the notifications
- * endpoint; deleteRoot deliberately did NOT). Also proves sqlite is opened
- * read-only everywhere and that the sidecar never shells out.
+ * endpoint, command-results with the commands endpoint (mkdir-at-boot only,
+ * result files are runner-written and sidecar-read); deleteRoot deliberately
+ * gained NEITHER). Also proves sqlite is opened read-only everywhere and
+ * that the sidecar never shells out.
  */
 
 const SRC = join(import.meta.dirname, '..', 'src')

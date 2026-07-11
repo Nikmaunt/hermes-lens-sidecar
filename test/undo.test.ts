@@ -43,6 +43,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
       notifInboxDir: env.paths.notifInboxDir,
+      commandResultsDir: env.paths.commandResultsDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })
@@ -50,6 +51,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
     for (const target of [
       join(env.paths.inboxDir, 'pozvonit-v-bank-0930.md'),
       join(env.paths.notifInboxDir, '1783334100000-gm-0a1b2c3d.md'), // write-allowed, delete-refused
+      join(env.paths.commandResultsDir, 'cmd-0a1b2c3d.json'), // runner's results are consumed by the agent, never deleted here
       join(env.paths.dataDir, 'journal.ndjson'),
       env.paths.lastSyncPath,
       env.paths.followupsPath,
@@ -64,6 +66,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
       notifInboxDir: env.paths.notifInboxDir,
+      commandResultsDir: env.paths.commandResultsDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })
@@ -81,6 +84,7 @@ describe('Writer: deletion allowed ONLY inside lens-queue', () => {
       inboxDir: env.paths.inboxDir,
       lensQueueDir: env.paths.lensQueueDir,
       notifInboxDir: env.paths.notifInboxDir,
+      commandResultsDir: env.paths.commandResultsDir,
       lastSyncPath: env.paths.lastSyncPath,
       dataDir: env.paths.dataDir,
     })

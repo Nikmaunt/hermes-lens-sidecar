@@ -115,6 +115,7 @@ describe('compactJobs unit (the startup path)', () => {
       inboxDir: join(dataDir, 'nope-inbox'),
       lensQueueDir: join(dataDir, 'nope-queue'),
       notifInboxDir: join(dataDir, 'nope-notif'),
+      commandResultsDir: join(dataDir, 'nope-results'),
       lastSyncPath: join(dataDir, 'nope-sync.json'),
       dataDir,
     })

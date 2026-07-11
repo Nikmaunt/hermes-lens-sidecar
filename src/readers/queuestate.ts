@@ -46,8 +46,19 @@ export interface QueueState {
   somedayActions: Map<string, PendingSomedayAction>
   /** habitId → dates with a pending tick (unioned into completedDates). */
   habitTicks: Map<string, Set<string>>
+  /**
+   * commandId → still-queued command request. NOT in pendingFiles: commands
+   * are fire-and-forget with no undo in v1, so they must never become
+   * addressable by the delete-by-match undo primitive.
+   */
+  commands: Map<string, PendingCommand>
   /** Every well-formed queue file — undo deletes matching entries. */
   pendingFiles: PendingQueueFile[]
+}
+
+export interface PendingCommand {
+  command: string
+  requestedAt: string
 }
 
 export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
@@ -57,6 +68,7 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
     followupActions: new Map(),
     somedayActions: new Map(),
     habitTicks: new Map(),
+    commands: new Map(),
     pendingFiles: [],
   }
   const files = listFiles(lensQueueDir, log)
@@ -101,6 +113,11 @@ export function readQueueState(lensQueueDir: string, log: Logger): QueueState {
         dates.add(q.date)
         state.habitTicks.set(q.habitId, dates)
         state.pendingFiles.push({ path: f.path, type: 'habit-tick', itemId: q.habitId, date: q.date })
+      } else if (q.type === 'command' && typeof q.commandId === 'string') {
+        state.commands.set(q.commandId, {
+          command: typeof q.command === 'string' ? q.command : '',
+          requestedAt: typeof q.requestedAt === 'string' ? q.requestedAt : '1970-01-01T01:00:00+01:00',
+        })
       } else if (
         q.type === 'flag' &&
         typeof q.itemId === 'string' &&
