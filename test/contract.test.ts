@@ -7,6 +7,8 @@ import {
   CaptureResponse,
   ChatStartResponse,
   ChatJobResponse,
+  CommandAccepted,
+  CommandsResponse,
   DecisionsResponse,
   DocumentsResponse,
   FlagResponse,
@@ -54,6 +56,7 @@ const GET_ENDPOINTS: { path: string; schema: ZodType }[] = [
   { path: '/api/briefs', schema: BriefsResponse },
   { path: `/api/briefs/${toWarsawDate(new Date())}-morning`, schema: BriefDetail },
   { path: '/api/inbox', schema: InboxResponse },
+  { path: '/api/commands', schema: CommandsResponse },
   { path: '/api/reminders', schema: RemindersResponse },
   { path: '/api/search?q=%D0%BA%D0%BE%D1%84%D0%B5', schema: SearchResponse },
 ]
@@ -261,6 +264,32 @@ describe('contract walk — POST endpoints', () => {
     expect(replay.status).toBe(200)
     expect(NotificationCaptureResponse.parse(replay.json).status).toBe('duplicate')
     console.log('  ✓ POST /api/notifications — 401/401/201+duplicate, schema-valid')
+  })
+
+  it('POST /api/commands → CommandAccepted, 401 without/wrong token', async () => {
+    const body = {
+      clientId: 'contract-command-1',
+      type: 'adhoc-digest',
+      payload: { topic: 'contract walk digest' },
+    }
+    const noToken = await env.post('/api/commands', body, null)
+    expect(noToken.status).toBe(401)
+    const badToken = await env.post('/api/commands', body, 'wrong-token-wrong-token-wrong')
+    expect(badToken.status).toBe(401)
+
+    const r = await env.post('/api/commands', body)
+    expect(r.status).toBe(201)
+    expect(CommandAccepted.parse(r.json).status).toBe('ok')
+
+    const replay = await env.post('/api/commands', body)
+    expect(replay.status).toBe(200)
+    expect(CommandAccepted.parse(replay.json).status).toBe('duplicate')
+
+    const list = await env.get('/api/commands')
+    expect(list.status).toBe(200)
+    const items = CommandsResponse.parse(list.json).items
+    expect(items.some((i) => i.state === 'pending')).toBe(true)
+    console.log('  ✓ POST /api/commands — 401/401/201+duplicate, schema-valid')
   })
 
   let chatJobId = ''
