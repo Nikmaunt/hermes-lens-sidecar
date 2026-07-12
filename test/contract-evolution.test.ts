@@ -1,4 +1,5 @@
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AgentStatus,
@@ -69,6 +70,12 @@ beforeAll(async () => {
   await env.post(`/api/followups/${fuId}/action`, { action: 'done' })
   await env.post(`/api/followups/${fuId}/action`, { action: 'undo' })
 
+  // The fixture vault ships no someday.md — seed one line, as someday.test.ts does.
+  writeFileSync(
+    join(env.cfg.vaultDir, 'someday.md'),
+    '# Someday\n\n- [ ] научиться играть на укулеле (from [[muzykalnye-idei]])\n',
+    'utf8',
+  )
   const someday = SomedayResponse.parse((await env.get('/api/someday')).json)
   const sdId = someday.items[0]?.id ?? ''
   await env.post(`/api/someday/${sdId}/action`, { action: 'activate', date: '2026-09-01' })

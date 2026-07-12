@@ -21,6 +21,13 @@ export interface TimelineEventOut {
   title: string
   detail: string | null
   relatedId: string | null
+  /**
+   * Machine-readable event kind, served verbatim (contract: free string,
+   * optional). Journal records carry their writer's kind; collector-made
+   * events stamp their own (backup, cron, capture). Omitted — never null —
+   * when unknown, so the app falls back to its legacy title-prefix routing.
+   */
+  kind?: string
 }
 
 export const TIMELINE_PAGE_SIZE = 25
@@ -87,6 +94,9 @@ export function collectEvents(input: {
       title: sessionTitle(s),
       detail: sessionDetail(s),
       relatedId: null,
+      // Chat sessions carry no kind: they have no detail screen either way,
+      // and the app's legacy 'agent' handling already expands them in place.
+      ...(s.source === 'cron' ? { kind: 'cron' } : {}),
     })
   }
 
@@ -99,6 +109,7 @@ export function collectEvents(input: {
       title: 'Backup written',
       detail: `${f.name} · ${f.size} bytes`,
       relatedId: null,
+      kind: 'backup',
     })
   }
 
@@ -113,6 +124,8 @@ export function collectEvents(input: {
       title: j.title,
       detail: j.detail,
       relatedId: j.relatedId,
+      // Verbatim passthrough; pre-kind journal lines stay kind-less.
+      ...(j.kind !== undefined ? { kind: j.kind } : {}),
     })
   }
 
@@ -124,6 +137,9 @@ export function collectEvents(input: {
       title: 'Note captured',
       detail: n.slug,
       relatedId: n.slug,
+      // A live inbox file overrides the journal's capture record for the
+      // same slug — keep the kind so the override doesn't strip it.
+      kind: 'capture',
     })
   }
 

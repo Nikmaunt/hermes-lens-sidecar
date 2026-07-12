@@ -30,6 +30,8 @@ export function handleSyncAck(
   )
   appendJournal(writer, paths.journalPath, {
     type: 'ack',
+    // No screen behind a sync ack — 'system' kinds expand in place in the app.
+    kind: 'system',
     at: receivedAt,
     title: 'Reminders sync acknowledged',
     detail: req.lastSeenRevision,

@@ -31,7 +31,7 @@ export interface AgentStatusOut {
     ramTotalBytes: number
     uptimeSeconds: number
   }
-  tokenSpend: { todayUsd: number; monthUsd: number }
+  tokenSpend: { todayUsd: number; monthUsd: number; since?: string }
   generatedAt: string
 }
 
@@ -153,18 +153,26 @@ function readSystem(paths: Paths, log: Logger): AgentStatusOut['system'] {
   }
 }
 
-export function tokenSpend(sessions: SessionRow[], now: Date): { todayUsd: number; monthUsd: number } {
+export function tokenSpend(sessions: SessionRow[], now: Date): AgentStatusOut['tokenSpend'] {
   const today = toWarsawDate(now)
   const month = toWarsawMonth(now)
   let todayUsd = 0
   let monthUsd = 0
+  let earliestMs = Number.POSITIVE_INFINITY
   for (const s of sessions) {
     const day = toWarsawDate(new Date(s.startedAtMs))
     if (day === today) todayUsd += s.costUsd
     if (day.startsWith(month)) monthUsd += s.costUsd
+    earliestMs = Math.min(earliestMs, s.startedAtMs)
   }
   const round = (v: number): number => Math.round(v * 10_000) / 10_000
-  return { todayUsd: round(todayUsd), monthUsd: round(monthUsd) }
+  return {
+    todayUsd: round(todayUsd),
+    monthUsd: round(monthUsd),
+    // Warsaw date of the first accounted session (additive, optional in the
+    // contract). No sessions yet → omitted, never null/empty.
+    ...(Number.isFinite(earliestMs) ? { since: toWarsawDate(new Date(earliestMs)) } : {}),
+  }
 }
 
 export async function buildStatus(

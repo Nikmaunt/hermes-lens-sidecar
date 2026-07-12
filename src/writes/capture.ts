@@ -90,6 +90,7 @@ export function handleCapture(
   }
   appendJournal(writer, paths.journalPath, {
     type: 'capture',
+    kind: 'capture',
     at: response.capturedAt,
     title: 'Note captured',
     detail: slug,

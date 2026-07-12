@@ -168,6 +168,7 @@ export function handleNotification(
   // ids only — notification titles/bodies never reach journal or logs
   appendJournal(writer, paths.journalPath, {
     type: 'notification',
+    kind: 'notification',
     at: toWarsawIso(now),
     title: 'Notification captured',
     detail: itemId,

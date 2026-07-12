@@ -28,11 +28,20 @@ export interface JournalEntry {
   title: string
   detail: string | null
   relatedId: string | null
+  /**
+   * Machine-readable event kind served verbatim on /api/timeline; drives tap
+   * routing in the app (hermes-lens lib/eventRoute.ts). Free string by
+   * contract — the server may add kinds ahead of the app; kinds the app does
+   * not know expand in place. Absent on records from pre-kind versions.
+   */
+  kind: string
 }
 
-export interface JournalRecord extends JournalEntry {
+export interface JournalRecord extends Omit<JournalEntry, 'kind'> {
   /** Stable id derived from the line position in the append-only file. */
   id: string
+  /** Optional here: lines appended before kind existed have none. */
+  kind?: string
 }
 
 export function appendJournal(writer: Writer, journalPath: string, entry: JournalEntry): void {
@@ -58,6 +67,7 @@ export function readJournal(journalPath: string, log: Logger): JournalRecord[] {
           title: e.title,
           detail: typeof e.detail === 'string' ? e.detail : null,
           relatedId: typeof e.relatedId === 'string' ? e.relatedId : null,
+          ...(typeof e.kind === 'string' ? { kind: e.kind } : {}),
         })
       }
     } catch {

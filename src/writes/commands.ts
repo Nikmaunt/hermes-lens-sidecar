@@ -177,6 +177,7 @@ export function handleCommand(
   // ids only — command payloads (topics, note text) never reach journal or logs
   appendJournal(writer, paths.journalPath, {
     type: 'command',
+    kind: 'command',
     at: requestedAt,
     title: 'Command queued',
     detail: `${commandId} → ${req.type}`,

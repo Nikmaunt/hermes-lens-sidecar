@@ -83,6 +83,7 @@ export function handleTriage(
     })
     appendJournal(writer, paths.journalPath, {
       type: 'triage',
+      kind: 'triage-queued',
       at: requestedAt,
       title: 'Inbox triage queued',
       detail: `${itemId} → ${destination}`,
@@ -121,6 +122,9 @@ export function handleFollowupAction(
     const undoneAt = toWarsawIso(now)
     appendJournal(writer, paths.journalPath, {
       type: 'followup-undo',
+      // Undo rows expand in place in the app ('system' is not in its kind
+      // routing table) — same behavior they had before kind existed.
+      kind: 'system',
       at: undoneAt,
       title: 'Follow-up action undone',
       detail: `${itemId} → undo`,
@@ -166,6 +170,7 @@ export function handleFollowupAction(
   })
   appendJournal(writer, paths.journalPath, {
     type: 'followup-action',
+    kind: 'followup-queued',
     at: requestedAt,
     title: 'Follow-up action queued',
     detail: until !== undefined ? `${itemId} → ${action} until ${until}` : `${itemId} → ${action}`,
@@ -195,6 +200,7 @@ export function handleSomedayAction(
     if (!removed) return { status: 200, body: { status: 'gone', itemId } }
     appendJournal(writer, paths.journalPath, {
       type: 'someday-undo',
+      kind: 'system',
       at: toWarsawIso(now),
       title: 'Someday action undone',
       detail: `${itemId} → undo`,
@@ -238,6 +244,7 @@ export function handleSomedayAction(
   })
   appendJournal(writer, paths.journalPath, {
     type: 'someday-action',
+    kind: 'someday-queued',
     at: requestedAt,
     title: 'Someday action queued',
     detail: date !== undefined ? `${itemId} → ${action} ${date}` : `${itemId} → ${action}`,
@@ -302,6 +309,7 @@ export function handleHabitTick(
   })
   appendJournal(writer, paths.journalPath, {
     type: 'habit-tick',
+    kind: 'habit-queued',
     at: requestedAt,
     title: 'Habit tick queued',
     detail: `${habitId} → ${date}`,
@@ -353,6 +361,7 @@ export function handleFlag(
     })
     appendJournal(writer, paths.journalPath, {
       type: 'flag',
+      kind: 'memory-flag',
       at: requestedAt,
       title: 'Memory flag queued',
       detail: action,
