@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { Id } from './common'
 
+/**
+ * OPEN enum (response): the server may index new result kinds ahead of the
+ * app. Fallback applied at the group site below — an unknown kind is shown
+ * under the generic Timeline group instead of failing the whole search.
+ */
 export const SearchResultKind = z.enum([
   'memory',
   'people',
@@ -23,7 +28,7 @@ export const SearchResult = z.object({
 export type SearchResult = z.infer<typeof SearchResult>
 
 export const SearchResultGroup = z.object({
-  kind: SearchResultKind,
+  kind: SearchResultKind.catch('timeline'),
   results: z.array(SearchResult),
 })
 export type SearchResultGroup = z.infer<typeof SearchResultGroup>

@@ -4,11 +4,11 @@ import { Id, IsoDate, IsoDateTime } from './common'
 /*
  * The someday list (deferred follow-ups).
  *
- * Sidecar-first, like chat: the server grows the someday overlay and its
- * action endpoint before any Someday screen ships in the app, so the LIVE
- * prod contract is the source of truth for these shapes — this release adds
- * only the schemas (plus "someday" tolerance in the today/followups enums);
- * the screen and DataSource methods come next release. Evolve additively only.
+ * Sidecar-first, like chat: the server grew the someday overlay and its
+ * action endpoint before the Someday screen shipped, so the LIVE prod
+ * contract is the source of truth for these shapes. The screen and the
+ * DataSource methods are in the app now (Someday screen + the section on
+ * Today). Evolve additively only.
  *
  * Flow mirrors follow-ups: GET /api/someday lists parked items; POST an
  * action to activate one back onto the follow-up list (with a due date),
@@ -17,6 +17,11 @@ import { Id, IsoDate, IsoDateTime } from './common'
 
 /** An activate/close request queued for the agent (not yet executed). */
 export const SomedayPendingAction = z.object({
+  /**
+   * CLOSED enum: echoes back actions the client itself queued; new actions
+   * deploy client-first (enum-first-in-app), so the app always knows every
+   * value the server can legally send here.
+   */
   action: z.enum(['activate', 'close']),
   /** Present when action is "activate": the due date the item returns with. */
   date: IsoDate.optional(),
@@ -58,6 +63,8 @@ export const SomedayActionResponse = z.object({
    * "ok" = queued for the agent; "gone" = the item no longer exists
    * server-side (offline replay after the agent resolved it) — the client
    * treats it as success and drops the mutation.
+   * CLOSED enum: protocol status the offline queue branches on — an unknown
+   * value must fail loudly, not silently pick a branch.
    */
   status: z.enum(['ok', 'gone']),
   itemId: Id,

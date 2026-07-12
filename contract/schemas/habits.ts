@@ -38,6 +38,8 @@ export const HabitTickResponse = z.object({
   /**
    * "ok" = queued (or already recorded); "gone" = the habit no longer
    * exists server-side — the client treats it as success.
+   * CLOSED enum: protocol status the offline queue branches on — an unknown
+   * value must fail loudly, not silently pick a branch.
    */
   status: z.enum(['ok', 'gone']),
   itemId: Id,

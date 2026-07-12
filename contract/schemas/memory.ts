@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { Id, IsoDateTime, Sensitivity } from './common'
 
+/**
+ * OPEN enum (response): the agent may invent new memory categories ahead of
+ * the app. The fallback lives at the MemoryItem.category site as
+ * `.catch('misc')` — not here, because `.options` powers the category chips.
+ */
 export const MemoryCategory = z.enum([
   'identity',
   'preferences',
@@ -13,6 +18,10 @@ export const MemoryCategory = z.enum([
 ])
 export type MemoryCategory = z.infer<typeof MemoryCategory>
 
+/**
+ * CLOSED enum: request mutation — a 400 from an older sidecar that does not
+ * know a new action is the correct outcome; new actions deploy client-first.
+ */
 export const FlagAction = z.enum(['forget', 'mark-sensitive'])
 export type FlagAction = z.infer<typeof FlagAction>
 
@@ -26,12 +35,18 @@ export type PendingFlag = z.infer<typeof PendingFlag>
 
 export const MemoryItem = z.object({
   id: Id,
-  category: MemoryCategory,
+  /** OPEN enum fallback: an unknown category lands in 'misc' (neutral). */
+  category: MemoryCategory.catch('misc'),
   /** Short topic used for grouping and the Memory Map, e.g. "coffee". */
   topic: z.string(),
   fact: z.string(),
-  sensitivity: Sensitivity,
-  source: z.enum(['telegram', 'vault', 'inferred', 'capture']),
+  /** OPEN enum fallback, fail-closed: unknown level masks, never leaks. */
+  sensitivity: Sensitivity.catch('sensitive'),
+  /**
+   * OPEN enum fallback: source is display-only; an unknown ingestion channel
+   * reads as 'inferred' instead of failing the memory list parse.
+   */
+  source: z.enum(['telegram', 'vault', 'inferred', 'capture']).catch('inferred'),
   learnedAt: IsoDateTime,
   updatedAt: IsoDateTime,
   pendingFlag: PendingFlag.nullable(),

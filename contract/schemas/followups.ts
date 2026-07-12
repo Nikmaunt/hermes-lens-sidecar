@@ -2,7 +2,11 @@ import { z } from 'zod'
 import { Id, IsoDate } from './common'
 
 export const FollowupActionRequest = z.object({
-  /** "someday" parks the follow-up on the sidecar's someday list (sidecar-first). */
+  /**
+   * "someday" parks the follow-up on the sidecar's someday list (sidecar-first).
+   * CLOSED enum: request mutation — new actions deploy client-first; a 400
+   * from an older sidecar is the correct outcome.
+   */
   action: z.enum(['done', 'snooze', 'someday']),
   /** Required when action is "snooze": the new due date. */
   until: IsoDate.optional(),
@@ -24,6 +28,8 @@ export const FollowupActionResponse = z.object({
    * "ok" = queued for the agent; "gone" = the follow-up no longer exists
    * server-side (offline replay after the agent resolved it) — the client
    * treats it as success and drops the mutation.
+   * CLOSED enum: protocol status the offline queue branches on — an unknown
+   * value must fail loudly, not silently pick a branch.
    */
   status: z.enum(['ok', 'gone']),
   itemId: Id,

@@ -17,7 +17,12 @@ import { Id, IsoDateTime } from './common'
  * lives ~10 min server-side (TTL) before a poll 404s.
  */
 
-/** The three states the sidecar reports for a chat turn. */
+/**
+ * The three states the sidecar reports for a chat turn.
+ *
+ * CLOSED enum: protocol state machine — polling stops on the terminal states,
+ * so an unknown status must fail loudly, not silently keep or stop the poll.
+ */
 export const ChatStatus = z.enum(['running', 'done', 'error'])
 export type ChatStatus = z.infer<typeof ChatStatus>
 

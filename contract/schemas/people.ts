@@ -5,7 +5,12 @@ export const Agreement = z.object({
   id: Id,
   text: z.string(),
   madeOn: IsoDate,
-  status: z.enum(['open', 'done']),
+  /**
+   * OPEN enum fallback, fail-visible: an unknown status from a newer server
+   * keeps the agreement shown as still open (no strike-through) rather than
+   * failing the People screen or hiding a possibly live commitment.
+   */
+  status: z.enum(['open', 'done']).catch('open'),
 })
 export type Agreement = z.infer<typeof Agreement>
 
