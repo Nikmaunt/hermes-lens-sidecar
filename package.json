@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run test",
+    "check:mirror": "node scripts/check-mirror.mjs",
+    "check": "npm run check:mirror && npm run typecheck && npm run lint && npm run test",
     "start": "node dist/server.mjs"
   },
   "devDependencies": {
